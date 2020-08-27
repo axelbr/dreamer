@@ -33,7 +33,7 @@ class PyBullet:
     return self._observe()
 
   def _observe(self):
-    return dict(image=self._env.render(mode='rgb_array'))
+    return dict(image=self._env.render(mode='rgb_array', width=64, height=64))
 
 
 class DeepMindControl:
