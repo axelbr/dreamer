@@ -5,8 +5,35 @@ import threading
 import traceback
 
 import gym
+import pybulletgym
 import numpy as np
 from PIL import Image
+
+class PyBullet:
+  def __init__(self, name, size=(320, 240), camera=None):
+    self._env = gym.make(name)
+    #self._env.render()
+    self._size = size
+
+  @property
+  def observation_space(self):
+    return gym.spaces.Dict({'image': gym.spaces.Box(0, 255, self._size + (3,), dtype=np.uint8)})
+
+  @property
+  def action_space(self):
+    return self._env.action_space
+
+  def step(self, action):
+    _, reward, done, info = self._env.step(action)
+    obs = self._observe()
+    return obs, reward, done, info
+
+  def reset(self):
+    self._env.reset()
+    return self._observe()
+
+  def _observe(self):
+    return dict(image=self._env.render(mode='rgb_array'))
 
 
 class DeepMindControl:

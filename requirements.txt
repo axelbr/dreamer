@@ -1,0 +1,7 @@
+tensorflow
+tensorflow_probability
+gym
+git+git://github.com/deepmind/dm_control.git
+-e git+https://github.com/axelbr/pybullet-gym.git#egg=pybullet
+pandas
+matplotlib
