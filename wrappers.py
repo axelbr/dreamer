@@ -10,8 +10,13 @@ from PIL import Image
 
 envs = {}
 
-class PyBullet:
+class ProcgenObservationWrapper(gym.ObservationWrapper):
 
+  def observation(self, observation):
+    return dict(image=observation)
+
+
+class PyBullet:
 
   def __init__(self, name, size=(320, 240), camera=None):
     if name not in envs.keys():

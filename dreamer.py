@@ -395,6 +395,7 @@ def make_env(config, writer, prefix, datadir, store):
   elif suite == 'procgen':
     import procgen
     env = gym.make(task)
+    env = wrappers.ProcgenObservationWrapper(env)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.OneHotAction(env)
   else:
