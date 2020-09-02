@@ -7,6 +7,8 @@ import pathlib
 import sys
 import time
 
+import gym
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['MUJOCO_GL'] = 'egl'
 
@@ -389,6 +391,11 @@ def make_env(config, writer, prefix, datadir, store):
     env = wrappers.PyBullet(name=task)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
+  elif suite == 'procgen':
+    import procgen
+    env = gym.make(task)
+    env = wrappers.ActionRepeat(env, config.action_repeat)
+    env = wrappers.OneHotAction(env)
   else:
     raise NotImplementedError(suite)
   env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
