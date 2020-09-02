@@ -8,12 +8,14 @@ import gym
 import numpy as np
 from PIL import Image
 
-envs = {
-  'HopperPyBulletEnv-v0': gym.make('HopperPyBulletEnv-v0')
-}
+envs = {}
 
 class PyBullet:
+
+
   def __init__(self, name, size=(320, 240), camera=None):
+    if name not in envs.keys():
+      envs[name] = gym.make(name)
     self._env = envs[name]
     self._env.render()
     self._env.reset()
