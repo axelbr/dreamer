@@ -10,10 +10,18 @@ from PIL import Image
 
 envs = {}
 
-class ProcgenObservationWrapper(gym.ObservationWrapper):
+class ProcgenWrapper(gym.Wrapper):
 
-  def observation(self, observation):
-    return dict(image=observation)
+  def __init__(self, env, seed=None):
+    super().__init__(env)
+    self._random = np.random.RandomState(seed)
+
+  def step(self, action):
+    obs, reward, done, info = super().step(action)
+    return dict(image=obs), reward, done, info
+
+  def reset(self, **kwargs):
+    return dict(image=super().reset())
 
 
 class PyBullet:
