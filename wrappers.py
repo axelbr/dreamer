@@ -5,13 +5,13 @@ import threading
 import traceback
 
 import gym
-import pybulletgym
 import numpy as np
 from PIL import Image
 
 envs = {
   'HopperPyBulletEnv-v0': gym.make('HopperPyBulletEnv-v0')
 }
+
 class PyBullet:
   def __init__(self, name, size=(320, 240), camera=None):
     self._env = envs[name]

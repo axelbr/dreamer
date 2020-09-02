@@ -387,6 +387,7 @@ def make_env(config, writer, prefix, datadir, store):
         life_done=True, sticky_actions=True)
     env = wrappers.OneHotAction(env)
   elif suite == 'bullet':
+    import pybulletgym
     print(f'Start bullet {task} experiment')
     env = wrappers.PyBullet(name=task)
     env = wrappers.ActionRepeat(env, config.action_repeat)
