@@ -10,6 +10,38 @@ from PIL import Image
 
 envs = {}
 
+class RaceCarGymWrapper(gym.Wrapper):
+
+  def __init__(self, name, size=(320, 240)):
+    if name not in envs.keys():
+      envs[name] = gym.make(name)
+    self._env = envs[name]
+    self._env.render()
+    self._env.reset()
+    self._size = size
+
+  @property
+  def observation_space(self):
+    return gym.spaces.Dict({'image': gym.spaces.Box(0, 255, self._size + (3,), dtype=np.uint8)})
+
+  @property
+  def action_space(self):
+    return self._env.action_space[1]
+
+  def step(self, action):
+    actions = np.zeros(shape=(len(self._env.action_space), *self.action_space.shape))
+    actions[1] = action
+    observations, reward, done, info = self._env.step(actions)
+    obs = {}
+    obs['image'] = observations[1]['rgb_camera']
+    return obs, reward[1], done[1], info[1]
+
+  def reset(self):
+    obs = {}
+    obs['image'] = self._env.reset()[1]['rgb_camera']
+    return obs
+
+
 class ProcgenWrapper(gym.Wrapper):
 
   def __init__(self, env, seed=None):
