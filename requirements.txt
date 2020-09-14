@@ -1,7 +1,7 @@
 tensorflow
 tensorflow_probability
 gym
-git+git://github.com/deepmind/dm_control.git
+#git+git://github.com/deepmind/dm_control.git
 -e git+https://github.com/axelbr/pybullet-gym.git#egg=pybulletgym
 -e git+https://github.com/axelbr/racecar_gym.git#egg=racecar_gym
 pandas
