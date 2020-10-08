@@ -10,36 +10,43 @@ from PIL import Image
 
 envs = {}
 
-class SingleRaceCarWrapper(gym.Wrapper):
+class SingleRaceCarWrapper:
 
   def __init__(self, name, id, size=(100,)):
+    import racecar_gym
     if name not in envs.keys():
       envs[name] = gym.make(name)
-    self._env = envs[name]
+    self.env = envs[name]
+    self._agent_ids = list(self.env.observation_space.spaces.keys())
     self._size = size
     self._id = id
 
+
   @property
   def observation_space(self):
-    return gym.spaces.Dict(self._env.observation_space[self._id])
+    space = self.env.observation_space[self._id]
+    return space
 
   @property
   def action_space(self):
-    action_space = self._env.action_space
+    action_space = self.env.action_space
     return gym.spaces.Box(
       np.append(action_space[self._id]['motor'].low, action_space[self._id]['steering'].low),
       np.append(action_space[self._id]['motor'].high, action_space[self._id]['steering'].high)
     )
 
   def step(self, action):
-    action = {'motor': (action[0], action[1]), 'steering': action[2]}
-    obs, reward, done, info = self.env.step({self._id: action})
-    obs[self._id]['image'] = obs[self._id]['rgb_camera']
+    actions = dict([(a, {'motor': (0, 0), 'steering': 0}) for a in self._agent_ids])
+    actions[self._id] = {'motor': (action[0], action[1]), 'steering': action[2]}
+    obs, reward, done, info = self.env.step(actions)
+    if 'rgb_camera' in obs[self._id]:
+      obs[self._id]['image'] = obs[self._id]['rgb_camera']
     return obs[self._id], reward[self._id], done[self._id], info[self._id]
 
   def reset(self):
     obs = self.env.reset()
-    obs[self._id]['image'] = obs[self._id]['rgb_camera']
+    if 'rgb_camera' in obs[self._id]:
+      obs[self._id]['image'] = obs[self._id]['rgb_camera']
     return obs[self._id]
 
 
@@ -422,7 +429,7 @@ class RewardObs:
   def observation_space(self):
     spaces = self._env.observation_space.spaces
     assert 'reward' not in spaces
-    spaces['reward'] = gym.spaces.Box(-np.inf, np.inf, dtype=np.float32)
+    spaces['reward'] = gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32)
     return gym.spaces.Dict(spaces)
 
   def step(self, action):
