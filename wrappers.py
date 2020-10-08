@@ -10,36 +10,37 @@ from PIL import Image
 
 envs = {}
 
-class RaceCarGymWrapper(gym.Wrapper):
+class SingleRaceCarWrapper(gym.Wrapper):
 
-  def __init__(self, name, size=(320, 240)):
+  def __init__(self, name, id, size=(100,)):
     if name not in envs.keys():
       envs[name] = gym.make(name)
     self._env = envs[name]
-    self._env.render()
-    self._env.reset()
     self._size = size
+    self._id = id
 
   @property
   def observation_space(self):
-    return gym.spaces.Dict({'image': gym.spaces.Box(0, 255, self._size + (3,), dtype=np.uint8)})
+    return gym.spaces.Dict(self._env.observation_space[self._id])
 
   @property
   def action_space(self):
-    return self._env.action_space[1]
+    action_space = self._env.action_space
+    return gym.spaces.Box(
+      np.append(action_space[self._id]['motor'].low, action_space[self._id]['steering'].low),
+      np.append(action_space[self._id]['motor'].high, action_space[self._id]['steering'].high)
+    )
 
   def step(self, action):
-    actions = np.zeros(shape=(len(self._env.action_space), *self.action_space.shape))
-    actions[1] = action
-    observations, reward, done, info = self._env.step(actions)
-    obs = {}
-    obs['image'] = observations[1]['rgb_camera']
-    return obs, reward[1], done[1], info[1]
+    action = {'motor': (action[0], action[1]), 'steering': action[2]}
+    obs, reward, done, info = self.env.step({self._id: action})
+    obs[self._id]['image'] = obs[self._id]['rgb_camera']
+    return obs[self._id], reward[self._id], done[self._id], info[self._id]
 
   def reset(self):
-    obs = {}
-    obs['image'] = self._env.reset()[1]['rgb_camera']
-    return obs
+    obs = self.env.reset()
+    obs[self._id]['image'] = obs[self._id]['rgb_camera']
+    return obs[self._id]
 
 
 class ProcgenWrapper(gym.Wrapper):

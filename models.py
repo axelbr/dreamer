@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow.keras import layers as tfkl
 from tensorflow_probability import distributions as tfd
 from tensorflow.keras.mixed_precision import experimental as prec
+from tensorflow_probability import layers as tfpl
 
 import tools
 
@@ -80,6 +81,28 @@ class RSSM(tools.Module):
     prior = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': deter}
     return prior
 
+class LidarEncoder(tools.Module):
+  def __init__(self,  output_dim, act=tf.nn.relu):
+    self._act = act
+    self._output_dim = output_dim
+
+  def __call__(self, obs):
+    kwargs = dict(strides=1, activation=self._act, padding='same')
+    lidar = obs['lidar']
+    if len(lidar.shape) > 2:
+      x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:], 1))
+    else:
+      x = tf.expand_dims(lidar, axis=-1)
+    x = self.get('conv1', tfkl.Conv1D, filters=4, kernel_size=5, **kwargs)(x)
+    #x = self.get('pool1', tfkl.MaxPool1D, pool_size=3)(x)
+    #x = self.get('dropout1', tfkl.Dropout, rate=0.25)(x)
+    x = self.get('conv2', tfkl.Conv1D, filters=8, kernel_size=3, **kwargs)(x)
+   # x = self.get('pool2', tfkl.MaxPool1D, pool_size=3)(x)
+    x = self.get('flat', tfkl.Flatten)(x)
+    x = self.get('dense', tfkl.Dense, units=self._output_dim)(x)
+
+    shape = (*lidar.shape[:-1], *x.shape[1:])
+    return tf.reshape(x, shape=shape)
 
 class ConvEncoder(tools.Module):
 
@@ -116,6 +139,19 @@ class ConvDecoder(tools.Module):
     mean = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
     return tfd.Independent(tfd.Normal(mean, 1), len(self._shape))
 
+class LidarDecoder(tools.Module):
+
+  def __init__(self, output_dim, act=tf.nn.relu):
+    self._act = act
+    self._output_dim = output_dim
+
+  def __call__(self, features):
+    params = tfpl.IndependentNormal.params_size(self._output_dim[0])
+    x = tf.reshape(features, shape=(-1, *features.shape[2:]))
+    x = self.get('params', tfkl.Dense, params, activation=self._act)(x)
+    x = self.get('dist', tfpl.IndependentNormal, event_shape=self._output_dim[0])(x)
+    dist = tfd.BatchReshape(x, batch_shape=features.shape[:2])
+    return dist
 
 class DenseDecoder(tools.Module):
 

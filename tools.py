@@ -1,10 +1,11 @@
 import datetime
 import io
+import math
 import pathlib
 import pickle
 import re
 import uuid
-
+import matplotlib.pyplot as plt
 import gym
 import numpy as np
 import tensorflow as tf
@@ -60,6 +61,41 @@ def graph_summary(writer, fn, *args):
   return tf.numpy_function(inner, args, [])
 
 
+def lidar_to_image(scan):
+  angles = tf.linspace(-math.radians(270.0 / 2), math.radians(270.0 / 2), scan.shape[-1])
+  angles = tf.cast(angles, tf.float16)
+  images = []
+  for i in range(scan.shape[1]):
+    x = scan[0, i, :] * tf.cos(angles)
+    y = scan[0, i, :] * tf.sin(angles)
+      #plt.scatter(x, y)
+
+    fig = plt.figure(figsize=(1.5, 1.5), dpi=150)
+    ax = fig.add_subplot(111)
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_xlim(-8, 8)
+    ax.set_ylim(-8, 8)
+    ax.scatter(x, y, s=1, label="sin")
+    fig.canvas.draw()
+    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close(fig)
+    images.append(data)
+  video = tf.stack(images)
+  return video
+
+import imageio
+from PIL import Image
+def gif_summary(video, fps=30):
+  frames = []
+  video = tf.concat([video[v, :] for v in range(video.shape[0])], axis=2)
+  for i in range(video.shape[0]):
+    frames.append(video[i].numpy())
+  imageio.mimsave('./lidar.gif', frames)
+
+
+
 def video_summary(name, video, step=None, fps=20):
   name = name if isinstance(name, str) else name.decode('utf-8')
   if np.issubdtype(video.dtype, np.floating):
@@ -68,7 +104,7 @@ def video_summary(name, video, step=None, fps=20):
   try:
     frames = video.transpose((1, 2, 0, 3, 4)).reshape((T, H, B * W, C))
     summary = tf1.Summary()
-    image = tf1.Summary.Image(height=B * H, width=T * W, colorspace=C)
+    image = tf1.Summary.Image(height=H*3, width=W, colorspace=C)
     image.encoded_image_string = encode_gif(frames, fps)
     summary.value.add(tag=name + '/gif', image=image)
     tf.summary.experimental.write_raw_pb(summary.SerializeToString(), step)
@@ -76,7 +112,6 @@ def video_summary(name, video, step=None, fps=20):
     print('GIF summaries require ffmpeg in $PATH.', e)
     frames = video.transpose((0, 2, 1, 3, 4)).reshape((1, B * H, T * W, C))
     tf.summary.image(name + '/grid', frames, step)
-
 
 def encode_gif(frames, fps):
   from subprocess import Popen, PIPE
@@ -97,7 +132,7 @@ def encode_gif(frames, fps):
   return out
 
 
-def simulate(agent, envs, steps=0, episodes=0, state=None):
+def simulate(agent, envs, steps=0, episodes=0, state=None, training=True):
   # Initialize or unpack simulation state.
   if state is None:
     step, episode = 0, 0
