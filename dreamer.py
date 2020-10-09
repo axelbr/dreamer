@@ -45,7 +45,7 @@ def define_config():
   config.precision = 16
   config.obs_type = 'image'
   # Environment.
-  config.task = 'dmc_walker_walk'
+  config.task = 'racecar_MultiAgentAustria'
   config.envs = 1
   config.parallel = 'none'
   config.action_repeat = 2

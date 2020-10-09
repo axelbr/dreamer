@@ -57,14 +57,14 @@ class RSSM(tools.Module):
 
   @tf.function
   def obs_step(self, prev_state, prev_action, embed):
-    prior = self.img_step(prev_state, prev_action)
+    prior = self.img_step(prev_state, prev_action)    # get distribution+ of the current state
     x = tf.concat([prior['deter'], embed], -1)
     x = self.get('obs1', tfkl.Dense, self._hidden_size, self._activation)(x)
     x = self.get('obs2', tfkl.Dense, 2 * self._stoch_size, None)(x)
     mean, std = tf.split(x, 2, -1)
     std = tf.nn.softplus(std) + 0.1
     stoch = self.get_dist({'mean': mean, 'std': std}).sample()
-    post = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': prior['deter']}
+    post = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': prior['deter']}    # get distr+ of next state
     return post, prior
 
   @tf.function
@@ -94,10 +94,7 @@ class LidarEncoder(tools.Module):
     else:
       x = tf.expand_dims(lidar, axis=-1)
     x = self.get('conv1', tfkl.Conv1D, filters=4, kernel_size=5, **kwargs)(x)
-    #x = self.get('pool1', tfkl.MaxPool1D, pool_size=3)(x)
-    #x = self.get('dropout1', tfkl.Dropout, rate=0.25)(x)
     x = self.get('conv2', tfkl.Conv1D, filters=8, kernel_size=3, **kwargs)(x)
-   # x = self.get('pool2', tfkl.MaxPool1D, pool_size=3)(x)
     x = self.get('flat', tfkl.Flatten)(x)
     x = self.get('dense', tfkl.Dense, units=self._output_dim)(x)
 
