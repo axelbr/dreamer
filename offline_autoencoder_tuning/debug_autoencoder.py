@@ -6,10 +6,12 @@ import tensorflow as tf
 import tools
 from tensorflow_probability import layers as tfpl
 from tensorflow_probability import distributions as tfd
+from offline_autoencoder_tuning.rendering.rendering_tools import _image_summaries
 
 tf.executing_eagerly = True
+tf.keras.backend.set_floatx('float64')
 
-epochs = 1
+epochs = 100
 batch_size = 32
 learning_rate = 0.01
 shuffle_batch = 1000
@@ -23,7 +25,9 @@ class MyLidarEncoder(tools.Module):
 
     def __call__(self, obs):
         kwargs = dict(strides=1, activation=self._act, padding='same')
-        lidar = obs['lidar']
+        lidar = obs
+        if type(obs)==dict:
+            lidar = obs['lidar']
         if len(lidar.shape) > 2:
             x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:], 1))
         else:
@@ -64,14 +68,12 @@ output_dir = os.path.join("offline_autoencoder_tuning", "out")
 dataset_filename = "dataset_random_starts_austria_2000episodes_1000maxobs.h5"
 data = h5.File(os.path.join(output_dir, dataset_filename), "r")
 
-all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())])
-training_data = tf.data.Dataset.from_tensor_slices(all_obs).shuffle(shuffle_batch).batch(batch_size)
-"""
-for batch in dataset:
-    print(batch.shape)
-    batch_obs = {'lidar': batch}
-    latent = encode(batch_obs)
-"""
+all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())])    # 1000 for debug
+data = tf.data.Dataset.from_tensor_slices(all_obs).shuffle(shuffle_batch)
+test_size = 100    # just to create gif
+val_data = data.take(test_size)
+train_data = data.skip(test_size)
+
 autoencoder = Autoencoder(encoded_obs_dim, lidar_shape)
 opt = tf.optimizers.Adam(learning_rate=learning_rate)
 
@@ -86,8 +88,21 @@ def train(loss, model, optimizer, original):
         gradient_variables = zip(gradients, model.trainable_variables)
         optimizer.apply_gradients(gradient_variables)
 
+train_data = train_data.batch(batch_size)
+val_data = val_data.batch(batch_size)
 for epoch in range(epochs):
-    for step, batch_features in enumerate(training_data):
+    print("{}/{}".format(epoch + 1, epochs))
+    for step, batch_features in enumerate(train_data):
         train(loss, autoencoder, opt, batch_features)
         loss_values = loss(autoencoder, batch_features)
         reconstructed = autoencoder(batch_features)
+        if (step % 10 == 0):
+            print("\t{}/{} => loss: {}".format(step + 1, len(train_data), loss_values))
+
+    if epoch % 10 == 0:
+        for step, batch_features in enumerate(val_data):
+            if (step % 10 == 0):
+                print("\tTest: {}/{}".format(step + 1, len(val_data)))
+            latent = autoencoder.encoder(batch_features)
+            reconstructed = autoencoder(batch_features)
+            _image_summaries(batch_features, latent, reconstructed, name="{}_{}".format(epoch+1, step+1))
