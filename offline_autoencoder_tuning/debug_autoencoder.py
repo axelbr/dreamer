@@ -4,7 +4,7 @@ import h5py as h5
 import os
 import tensorflow as tf
 import tools
-import tensorflow_probability as tfpl
+from tensorflow_probability import layers as tfpl
 from tensorflow_probability import distributions as tfd
 
 tf.executing_eagerly = True
@@ -37,17 +37,17 @@ class MyLidarEncoder(tools.Module):
         return tf.reshape(x, shape=shape)
 
 class MyLidarDecoder(tools.Module):
-  def __init__(self, output_dim, act=tf.nn.relu):
-    self._act = act
-    self._output_dim = output_dim
+      def __init__(self, output_dim, act=tf.nn.relu):
+            self._act = act
+            self._output_dim = output_dim
 
-  def __call__(self, features):
-    params = tfpl.IndependentNormal.params_size(self._output_dim)
-    x = tf.reshape(features, shape=(-1, *features.shape[2:]))
-    x = self.get('params', tf.keras.layers.Dense, params, activation=self._act)(x)
-    x = self.get('dist', tfpl.IndependentNormal, event_shape=self._output_dim)(x)
-    dist = tfd.BatchReshape(x, batch_shape=features.shape[:2])
-    return dist
+      def __call__(self, features):
+            params = tfpl.IndependentNormal.params_size(self._output_dim)
+            x = tf.reshape(features, shape=(-1, *features.shape[1:]))
+            x = self.get('params', tf.keras.layers.Dense, params, activation=self._act)(x)
+            x = self.get('dist', tfpl.IndependentNormal, event_shape=self._output_dim)(x)
+            dist = tfd.BatchReshape(x, batch_shape=features.shape[:1])
+            return dist
 
 class Autoencoder(tf.keras.Model):
     def __init__(self, latent_dim, original_dim):
@@ -78,10 +78,7 @@ opt = tf.optimizers.Adam(learning_rate=learning_rate)
 def loss(model, original):
     image_pred = model(original)
     return - tf.reduce_mean(image_pred.log_prob(original))      # max loglikelihood = min entropy, entropy=-log p
-"""
-autoencoder.compile(opt, loss)
-autoencoder.fit(training_data, training_data, batch_size, epochs=1, verbose=2)
-"""
+
 def train(loss, model, optimizer, original):
     with tf.GradientTape() as tape:
         loss = loss(model, original)
