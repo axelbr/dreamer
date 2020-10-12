@@ -54,13 +54,13 @@ class MyLidarDecoder(tools.Module):
             dist = tfd.BatchReshape(x, batch_shape=features.shape[:1])
             return dist
 
-class Autoencoder(tf.keras.Model):
+class Autoencoder(tools.Module):
     def __init__(self, latent_dim, original_dim):
         super(Autoencoder, self).__init__()
         self.encoder = MyLidarEncoder(output_dim=latent_dim)
         self.decoder = MyLidarDecoder(output_dim=original_dim)
 
-    def call(self, input):
+    def __call__(self, input):
         latent = self.encoder({'lidar': input})
         reconstructed = self.decoder(latent)
         return reconstructed
@@ -72,7 +72,7 @@ def loss(model, original):
 def train(loss, model, optimizer, original):
     with tf.GradientTape() as tape:
         loss = loss(model, original)
-        gradients = tape.gradient(loss, model.trainable_variables)
+    gradients = tape.gradient(loss, model.trainable_variables)
     gradient_variables = zip(gradients, model.trainable_variables)
     optimizer.apply_gradients(gradient_variables)
 
