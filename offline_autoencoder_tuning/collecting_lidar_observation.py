@@ -3,7 +3,7 @@ from time import sleep
 from datetime import datetime
 from racecar_gym import MultiAgentScenario
 from racecar_gym.envs.multi_race_car_env import MultiAgentRaceCarEnv
-from baselines.gap_follower import GapFollower
+from racecar_gym.agents.gap_follower import GapFollower
 from offline_autoencoder_tuning.MultiAgentWrapperToSingleAgent import MultiAgentWrapperToSingleAgent as EnvWrapper
 import rlephant
 
