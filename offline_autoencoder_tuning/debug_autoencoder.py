@@ -12,7 +12,7 @@ from offline_autoencoder_tuning.rendering.rendering_tools import _image_summarie
 tf.executing_eagerly = True
 tf.keras.backend.set_floatx('float64')
 
-epochs = 50
+epochs = 20
 batch_size = 32
 learning_rate = 0.01
 shuffle_batch = 1000
@@ -82,7 +82,7 @@ output_dir = os.path.join("offline_autoencoder_tuning", "out")
 dataset_filename = "dataset_random_starts_austria_2000episodes_1000maxobs.h5"
 data = h5.File(os.path.join(output_dir, dataset_filename), "r")
 # prepare dataset
-all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())[:100]])    # 1000 for debug
+all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())[:200]])
 data = tf.data.Dataset.from_tensor_slices(all_obs).shuffle(shuffle_batch)
 test_size = 100    # just to create gif
 val_data = data.take(test_size)
