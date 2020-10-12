@@ -12,8 +12,8 @@ from offline_autoencoder_tuning.rendering.rendering_tools import _image_summarie
 tf.executing_eagerly = True
 tf.keras.backend.set_floatx('float64')
 
-epochs = 100
-batch_size = 64
+epochs = 5
+batch_size = 32
 learning_rate = 0.01
 shuffle_batch = 1000
 encoded_obs_dim = 128
@@ -73,8 +73,8 @@ def train(loss, model, optimizer, original):
     with tf.GradientTape() as tape:
         loss = loss(model, original)
         gradients = tape.gradient(loss, model.trainable_variables)
-        gradient_variables = zip(gradients, model.trainable_variables)
-        optimizer.apply_gradients(gradient_variables)
+    gradient_variables = zip(gradients, model.trainable_variables)
+    optimizer.apply_gradients(gradient_variables)
 
 
 # load data
