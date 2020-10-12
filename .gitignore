@@ -5,5 +5,6 @@ __pycache__/
 ./logdir
 venv
 .idea
+*gif
 MUJOCO_LOG.TXT
 /offline_autoencoder_tuning/out/
