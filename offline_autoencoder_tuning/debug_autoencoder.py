@@ -1,4 +1,5 @@
-import models
+import time
+from datetime import datetime
 import numpy as np
 import h5py as h5
 import os
@@ -12,7 +13,7 @@ tf.executing_eagerly = True
 tf.keras.backend.set_floatx('float64')
 
 epochs = 100
-batch_size = 32
+batch_size = 64
 learning_rate = 0.01
 shuffle_batch = 1000
 encoded_obs_dim = 128
@@ -64,19 +65,6 @@ class Autoencoder(tf.keras.Model):
         reconstructed = self.decoder(latent)
         return reconstructed
 
-output_dir = os.path.join("offline_autoencoder_tuning", "out")
-dataset_filename = "dataset_random_starts_austria_2000episodes_1000maxobs.h5"
-data = h5.File(os.path.join(output_dir, dataset_filename), "r")
-
-all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())])    # 1000 for debug
-data = tf.data.Dataset.from_tensor_slices(all_obs).shuffle(shuffle_batch)
-test_size = 100    # just to create gif
-val_data = data.take(test_size)
-train_data = data.skip(test_size)
-
-autoencoder = Autoencoder(encoded_obs_dim, lidar_shape)
-opt = tf.optimizers.Adam(learning_rate=learning_rate)
-
 def loss(model, original):
     image_pred = model(original)
     return - tf.reduce_mean(image_pred.log_prob(original))      # max loglikelihood = min entropy, entropy=-log p
@@ -88,10 +76,30 @@ def train(loss, model, optimizer, original):
         gradient_variables = zip(gradients, model.trainable_variables)
         optimizer.apply_gradients(gradient_variables)
 
+
+# load data
+output_dir = os.path.join("offline_autoencoder_tuning", "out")
+dataset_filename = "dataset_random_starts_austria_2000episodes_1000maxobs.h5"
+data = h5.File(os.path.join(output_dir, dataset_filename), "r")
+# prepare dataset
+all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())[:100]])    # 1000 for debug
+data = tf.data.Dataset.from_tensor_slices(all_obs).shuffle(shuffle_batch)
+test_size = 100    # just to create gif
+val_data = data.take(test_size)
+train_data = data.skip(test_size)
+# model def
+autoencoder = Autoencoder(encoded_obs_dim, lidar_shape)
+opt = tf.optimizers.Adam(learning_rate=learning_rate)
+# TODO: not working with keras 'fit' for some issue wt type (it found a tuple during training)
+#autoencoder.compile(opt, loss)
+#autoencoder.fit(all_obs, all_obs, epochs=epochs, batch_size=batch_size, shuffle=True, verbose=2)
+
 train_data = train_data.batch(batch_size)
 val_data = val_data.batch(batch_size)
+init = time.time()
 for epoch in range(epochs):
-    print("{}/{}".format(epoch + 1, epochs))
+    print("{}/{} => init time: {:.3f}s".format(epoch + 1, epochs, time.time()-init))
+    init = time.time()
     for step, batch_features in enumerate(train_data):
         train(loss, autoencoder, opt, batch_features)
         loss_values = loss(autoencoder, batch_features)
@@ -99,10 +107,12 @@ for epoch in range(epochs):
         if (step % 10 == 0):
             print("\t{}/{} => loss: {}".format(step + 1, len(train_data), loss_values))
 
-    if epoch % 10 == 0:
-        for step, batch_features in enumerate(val_data):
-            if (step % 10 == 0):
-                print("\tTest: {}/{}".format(step + 1, len(val_data)))
-            latent = autoencoder.encoder(batch_features)
-            reconstructed = autoencoder(batch_features)
-            _image_summaries(batch_features, latent, reconstructed, name="{}_{}".format(epoch+1, step+1))
+for step, batch_features in enumerate(val_data):
+    if (step % 10 == 0):
+        print("\tTest: {}/{}".format(step + 1, len(val_data)))
+    latent = autoencoder.encoder(batch_features)
+    reconstructed = autoencoder(batch_features)
+    _image_summaries(batch_features, latent, reconstructed, name="{}_{}".format(epoch+1, step+1))
+
+timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
+autoencoder.save("offline_autoencoder_tuning/models/autoencoder_{}".format(timestamp))
