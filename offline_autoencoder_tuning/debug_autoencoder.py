@@ -12,7 +12,7 @@ from offline_autoencoder_tuning.rendering.rendering_tools import _image_summarie
 tf.executing_eagerly = True
 tf.keras.backend.set_floatx('float64')
 
-epochs = 5
+epochs = 50
 batch_size = 32
 learning_rate = 0.01
 shuffle_batch = 1000
