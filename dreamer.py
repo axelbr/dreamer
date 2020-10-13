@@ -400,7 +400,7 @@ def make_env(config, writer, prefix, datadir, store):
     env = wrappers.OneHotAction(env)
   elif suite == 'racecar':
     import racecar_gym
-    env = wrappers.RaceCarGymWrapper(name=task)
+    env = wrappers.SingleRaceCarWrapper(id='A', name=task)
     env = wrappers.ActionRepeat(env, config.action_repeat)
   else:
     raise NotImplementedError(suite)
@@ -456,6 +456,7 @@ def main(config):
     agent.load(config.logdir / 'variables.pkl')
   state = None
   while step < config.steps:
+    print('Start evaluation.')
     print('Start evaluation.')
     tools.simulate(
         functools.partial(agent, training=False), test_envs, episodes=1)
