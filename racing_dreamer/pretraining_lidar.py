@@ -3,6 +3,7 @@ import tensorflow_probability as tfp
 import numpy as np
 from racing_dreamer.dataset import load_lidar
 import time
+import tools
 
 tfk = tf.keras
 tfkl = tf.keras.layers
@@ -111,6 +112,7 @@ for batch in iter(test_data):
     latent = vae.encoder(batch)
     sample = latent.sample()
     recon_dist = vae.decoder(latent)
+    tools.
     loss = tf.reduce_mean(negloglik(tf.expand_dims(batch, -1), recon_dist))
     test_loss += loss.numpy()
     if b % 10 == 0:
