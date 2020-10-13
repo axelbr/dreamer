@@ -11,6 +11,7 @@ import math
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from agents import gap_follower
+import gym
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['MUJOCO_GL'] = 'egl'
@@ -43,18 +44,16 @@ def define_config():
   config.log_images = True
   config.gpu_growth = True
   config.precision = 16
-  config.obs_type = 'image'
   # Environment.
   config.task = 'racecar_MultiAgentAustria'
   config.envs = 1
   config.parallel = 'none'
   config.action_repeat = 2
-  config.time_limit = 3000
+  config.time_limit = 1000
   config.prefill = 5000
   config.eval_noise = 0.0
   config.clip_rewards = 'none'
   # Model.
-  config.encoded_obs_dim = 1024
   config.deter_size = 200
   config.stoch_size = 30
   config.num_units = 400
@@ -93,10 +92,9 @@ def define_config():
 
 class Dreamer(tools.Module):
 
-  def __init__(self, config, datadir, actspace, obspace, writer):
+  def __init__(self, config, datadir, actspace, writer):
     self._c = config
     self._actspace = actspace
-    self._obspace = obspace
     self._actdim = actspace.n if hasattr(actspace, 'n') else actspace.shape[0]
     self._writer = writer
     self._random = np.random.RandomState(config.seed)
@@ -122,13 +120,12 @@ class Dreamer(tools.Module):
     if state is not None and reset.any():
       mask = tf.cast(1 - reset, self._float)[:, None]
       state = tf.nest.map_structure(lambda x: x * mask, state)
-    if self._should_train(step):# and training:
+    if self._should_train(step):
       log = self._should_log(step)
       n = self._c.pretrain if self._should_pretrain() else self._c.train_steps
       print(f'Training for {n} steps.')
       with self._strategy.scope():
         for train_step in range(n):
-          print(train_step)
           log_images = self._c.log_images and log and train_step == 0
           self.train(next(self._dataset), log_images)
       if log:
@@ -141,14 +138,11 @@ class Dreamer(tools.Module):
   @tf.function
   def policy(self, obs, state, training):
     if state is None:
-      latent = self._dynamics.initial(len(obs[self._c.obs_type]))
-      action = tf.zeros((len(obs[self._c.obs_type]), self._actdim), self._float)
+      latent = self._dynamics.initial(len(obs['image']))
+      action = tf.zeros((len(obs['image']), self._actdim), self._float)
     else:
       latent, action = state
-    if self._c.obs_type == 'image':
-      embed = self._encode(preprocess(obs, self._c))
-    else:
-      embed = self._encode(obs)
+    embed = self._encode(preprocess(obs, self._c))
     latent, _ = self._dynamics.obs_step(latent, action, embed)
     feat = self._dynamics.get_feat(latent)
     if training:
@@ -175,7 +169,7 @@ class Dreamer(tools.Module):
       image_pred = self._decode(feat)
       reward_pred = self._reward(feat)
       likes = tools.AttrDict()
-      likes.image = tf.reduce_mean(image_pred.log_prob(data[self._c.obs_type]))
+      likes.image = tf.reduce_mean(image_pred.log_prob(data['image']))
       likes.reward = tf.reduce_mean(reward_pred.log_prob(data['reward']))
       if self._c.pcont:
         pcont_pred = self._pcont(feat)
@@ -230,17 +224,10 @@ class Dreamer(tools.Module):
         leaky_relu=tf.nn.leaky_relu)
     cnn_act = acts[self._c.cnn_act]
     act = acts[self._c.dense_act]
-
-    if self._c.obs_type == 'image':
-      self._encode = models.ConvEncoder(self._c.cnn_depth, cnn_act)
-      self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
-    elif self._c.obs_type == 'lidar':
-      self._encode = models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
-      self._decode = models.LidarDecoder(output_dim=self._obspace['lidar'].shape)
-
-    self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
-
-
+    self._encode = models.ConvEncoder(self._c.cnn_depth, cnn_act)
+    self._dynamics = models.RSSM(
+        self._c.stoch_size, self._c.deter_size, self._c.deter_size)
+    self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
     self._reward = models.DenseDecoder((), 2, self._c.num_units, act=act)
     if self._c.pcont:
       self._pcont = models.DenseDecoder(
@@ -318,41 +305,17 @@ class Dreamer(tools.Module):
     self._metrics['action_ent'].update_state(self._actor(feat).entropy())
 
   def _image_summaries(self, data, embed, image_pred):
-    if self._c.obs_type == 'image':
-      truth = data['image'][:6] + 0.5
-      recon = image_pred.mode()[:6]
-      init, _ = self._dynamics.observe(embed[:6, :5], data['action'][:6, :5])
-      init = {k: v[:, -1] for k, v in init.items()}
-      prior = self._dynamics.imagine(data['action'][:6, 5:], init)
-      openl = self._decode(self._dynamics.get_feat(prior)).mode()
-      model = tf.concat([recon[:, :5] + 0.5, openl + 0.5], 1)
-      error = (model - truth + 1) / 2
-      openl = tf.concat([truth, model, error], 2)
-      tools.graph_summary(
-          self._writer, tools.video_summary, 'agent/openl', openl)
-    elif self._c.obs_type == 'lidar':
-      video = []
-      for i in range(3):
-        lidar = tf.expand_dims(data['lidar'][i], axis=0)
-        recon = image_pred.mode()[i]
-        embedded = tf.expand_dims(embed[i, :5], axis=0)
-        actions = tf.expand_dims(data['action'][i, :5], axis=0)
-        init, _ = self._dynamics.observe(embedded, actions)
-        init = {k: v[:, -1] for k, v in init.items()}
-        future_actions = tf.expand_dims(data['action'][i, 5:], axis=0)
-        prior = self._dynamics.imagine(future_actions, init)
-        openl = self._decode(self._dynamics.get_feat(prior)).mode()
-        model = tf.concat([tf.expand_dims(recon[:5, :], axis=0), openl], 1)
-
-        lidar_img = tools.lidar_to_image(lidar)
-        model_img = tools.lidar_to_image(model)
-        openl = tf.concat([lidar_img, model_img], 1)
-        video.append(openl)
-
-      video = tf.stack(video)
-      tools.gif_summary(video)
-      #tools.graph_summary(
-      #  self._writer, tools.video_summary, 'agent/openl', video)
+    truth = data['image'][:6] + 0.5
+    recon = image_pred.mode()[:6]
+    init, _ = self._dynamics.observe(embed[:6, :5], data['action'][:6, :5])
+    init = {k: v[:, -1] for k, v in init.items()}
+    prior = self._dynamics.imagine(data['action'][:6, 5:], init)
+    openl = self._decode(self._dynamics.get_feat(prior)).mode()
+    model = tf.concat([recon[:, :5] + 0.5, openl + 0.5], 1)
+    error = (model - truth + 1) / 2
+    openl = tf.concat([truth, model, error], 2)
+    tools.graph_summary(
+        self._writer, tools.video_summary, 'agent/openl', openl)
 
   def _write_summaries(self):
     step = int(self._step.numpy())
@@ -413,11 +376,11 @@ def summarize_episode(episode, config, datadir, writer, prefix):
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
-    if prefix == 'test' and config.obs_type == 'image':
+    if prefix == 'test':
       tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
 
 
-def make_env(config, writer, prefix, datadir, store, gui=False):
+def make_env(config, writer, prefix, datadir, store):
   suite, task = config.task.split('_', 1)
   if suite == 'dmc':
     env = wrappers.DeepMindControl(task)
@@ -428,14 +391,22 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
         task, config.action_repeat, (64, 64), grayscale=False,
         life_done=True, sticky_actions=True)
     env = wrappers.OneHotAction(env)
-  elif suite == 'racecar':
-    if gui:
-      env = wrappers.SingleRaceCarWrapper(id='A', name=task + '_Gui-v0')
-    else:
-      env = wrappers.SingleRaceCarWrapper(id='A', name=task + '-v0')
-
+  elif suite == 'bullet':
+    import pybulletgym
+    print(f'Start bullet {task} experiment')
+    env = wrappers.PyBullet(name=task)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
+  elif suite == 'procgen':
+    import procgen
+    env = gym.make(task)
+    env = wrappers.ProcgenWrapper(env)
+    env = wrappers.ActionRepeat(env, config.action_repeat)
+    env = wrappers.OneHotAction(env)
+  elif suite == 'racecar':
+    import racecar_gym
+    env = wrappers.SingleRaceCarWrapper(id='A', name=task)
+    env = wrappers.ActionRepeat(env, config.action_repeat)
   else:
     raise NotImplementedError(suite)
   env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
@@ -466,20 +437,17 @@ def main(config):
       str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
   train_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'train', datadir, store=True, gui=True), config.parallel)
+      config, writer, 'train', datadir, store=True), config.parallel)
       for _ in range(config.envs)]
   test_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'test', datadir, store=False, gui=False), config.parallel)
+      config, writer, 'test', datadir, store=False), config.parallel)
       for _ in range(config.envs)]
   actspace = train_envs[0].action_space
-  obspace = train_envs[0].observation_space
 
   # Prefill dataset with random episodes.
   step = count_steps(datadir, config)
   prefill = max(0, config.prefill - step)
   print(f'Prefill dataset with {prefill} steps.')
-  gapfollower = gap_follower.GapFollower()
-
   random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
   tools.simulate(random_agent, train_envs, prefill / config.action_repeat)
   writer.flush()
@@ -487,16 +455,13 @@ def main(config):
   # Train and regularly evaluate the agent.
   step = count_steps(datadir, config)
   print(f'Simulating agent for {config.steps-step} steps.')
-  agent = Dreamer(config, datadir, actspace, obspace, writer)
+  agent = Dreamer(config, datadir, actspace, writer)
   if (config.logdir / 'variables.pkl').exists():
     print('Load checkpoint.')
     agent.load(config.logdir / 'variables.pkl')
   state = None
-
-  state = tools.simulate(agent, train_envs, 10000, state=state, training=False)
-
-
   while step < config.steps:
+    print('Start evaluation.')
     print('Start evaluation.')
     tools.simulate(
         functools.partial(agent, training=False), test_envs, episodes=1)
