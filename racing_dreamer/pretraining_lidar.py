@@ -1,97 +1,99 @@
-import numpy as np
 import tensorflow as tf
-
 import tensorflow_probability as tfp
-from rlephant import ReplayStorage
+
+from racing_dreamer.dataset import load_lidar
 
 tfk = tf.keras
 tfkl = tf.keras.layers
 tfpl = tfp.layers
 tfd = tfp.distributions
 
-def generator(file: str):
-    storage = ReplayStorage(filename=file)
-    def _gen():
-        for episode in storage:
-            for transition in episode:
-                yield transition.observation['lidar']
-    return _gen
+class CVAE:
+    def __init__(self, input_shape, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        encoded_size = 16
+        base_depth = 32
+
+        self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(encoded_size), scale=1),
+                                reinterpreted_batch_ndims=1)
+
+        self.encoder = tfk.Sequential([
+            tfkl.InputLayer(input_shape=input_shape),
+            tfkl.Lambda(lambda x: tf.cast(x, tf.float32) - 0.5),
+            tfkl.Conv1D(base_depth, 5, strides=1, padding='same', activation=tf.nn.leaky_relu),
+            tfkl.Conv1D(2 * base_depth, 5, strides=2, padding='same', activation=tf.nn.leaky_relu),
+            tfkl.Conv1D(4 * encoded_size, 7, strides=1, padding='valid', activation=tf.nn.leaky_relu),
+            tfkl.Flatten(),
+            tfkl.Dense(tfpl.MultivariateNormalTriL.params_size(encoded_size)),
+            tfpl.MultivariateNormalTriL(encoded_size, activity_regularizer=tfpl.KLDivergenceRegularizer(self.prior)),
+        ])
+
+        self.decoder = tfk.Sequential([
+            tfkl.InputLayer(input_shape=self.encoder.output_shape),
+            tfkl.Reshape([encoded_size,1]),
+            tfkl.Conv1DTranspose(2 * base_depth, 7, strides=1, padding='valid', activation=tf.nn.leaky_relu),
+            tfkl.Conv1DTranspose(2 * base_depth, 5, strides=1, padding='same', activation=tf.nn.leaky_relu),
+            tfkl.Conv1DTranspose(2 * base_depth, 5, strides=2, padding='same', activation=tf.nn.leaky_relu),
+            tfkl.Conv1D(filters=1, kernel_size=5, strides=1, padding='same', activation=None),
+            tfkl.Flatten(),
+            tfkl.Dense(tfpl.IndependentNormal.params_size(tf.reduce_prod(input_shape)), activation=None),
+            tfpl.IndependentNormal(input_shape),
+        ])
+
+        self.model = tfk.Model(inputs=self.encoder.inputs, outputs=self.encoder.outputs[0])
+
+
+    def compile(self, optimizer='rmsprop', loss=None, metrics=None, loss_weights=None, weighted_metrics=None,
+                run_eagerly=None, **kwargs):
+        self.model.compile(optimizer, loss, metrics, loss_weights, weighted_metrics, run_eagerly, **kwargs)
+
+    def build(self, input_shape):
+        return self.model.build(input_shape)
+
+    def summary(self, line_length=None, positions=None, print_fn=None):
+        return self.model.summary(line_length, positions, print_fn)
+
+    def call(self, inputs, training=None, mask=None):
+        x_hat = self.model(inputs, training, mask)
+        return x_hat
+
 
 def preprocess(x, max=5.0):
     sample = tf.cast(x, tf.float32) / max
-    sample = sample < tf.random.uniform(tf.shape(sample))
-    return sample, sample
+    return sample
 
-file = 'pretraining_austria_single.h5'
-lidar_dataset = tf.data.Dataset.from_generator(generator=generator(file=file), output_types=tf.float64)
 
-size = 48_000
-train_size = int(0.9 * size)
-test_size = size - train_size
-train = lidar_dataset.take(train_size)\
+training_data, test_data = load_lidar('pretraining_data/austria_single_20000.h5', train=0.8, shuffle=True)
+training_data = training_data\
     .map(preprocess)\
     .batch(256)\
-    .prefetch(tf.data.experimental.AUTOTUNE)\
-    .shuffle(int(10e3))
-test = lidar_dataset.skip(train_size).take(test_size) \
+    .prefetch(tf.data.experimental.AUTOTUNE)
+
+test_data = test_data\
     .map(preprocess) \
-    .batch(256) \
-    .prefetch(tf.data.experimental.AUTOTUNE) \
-    .shuffle(int(10e3))
+    .batch(32) \
+    .prefetch(tf.data.experimental.AUTOTUNE)
 
-
-input_shape = (64,64,3)
-encoded_size = 16
-base_depth = 32
-
-prior = tfd.Independent(tfd.Normal(loc=tf.zeros(encoded_size), scale=1),
-                        reinterpreted_batch_ndims=1)
-
-encoder = tfk.Sequential([
-    tfkl.InputLayer(input_shape=input_shape),
-    tfkl.Lambda(lambda x: tf.cast(x, tf.float32) - 0.5),
-    tfkl.Conv1D(base_depth, 5, strides=1, padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv1D(base_depth, 5, strides=2, padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv1D(2 * base_depth, 5, strides=1, padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv1D(2 * base_depth, 5, strides=2, padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv1D(4 * encoded_size, 7, strides=1, padding='valid', activation=tf.nn.leaky_relu),
-    tfkl.Flatten(),
-    tfkl.Dense(tfpl.MultivariateNormalTriL.params_size(encoded_size), activation=None),
-    tfpl.MultivariateNormalTriL(encoded_size, activity_regularizer=tfpl.KLDivergenceRegularizer(prior)),
-])
-
-decoder = tfk.Sequential([
-    tfkl.InputLayer(input_shape=[encoded_size]),
-    tfkl.Reshape([1, 1, encoded_size]),
-    tfkl.Conv2DTranspose(2 * base_depth, 7, strides=1,
-                         padding='valid', activation=tf.nn.leaky_relu),
-    tfkl.Conv2DTranspose(2 * base_depth, 5, strides=1,
-                         padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv2DTranspose(2 * base_depth, 5, strides=2,
-                         padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv2DTranspose(base_depth, 5, strides=1,
-                         padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv2DTranspose(base_depth, 5, strides=2,
-                         padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv2DTranspose(base_depth, 5, strides=1,
-                         padding='same', activation=tf.nn.leaky_relu),
-    tfkl.Conv2D(filters=1, kernel_size=5, strides=1,
-                padding='same', activation=None),
-    tfkl.Flatten(),
-    tfkl.Dense(tfpl.IndependentBernoulli.params_size(tf.reduce_prod(input_shape)), activation=None),
-    tfpl.IndependentBernoulli(input_shape, tfd.Bernoulli.logits),
-])
-
-vae = tfk.Model(inputs=encoder.inputs,
-                outputs=decoder(encoder.outputs[0]))
+vae = CVAE(input_shape=(1080, 1))
 
 negloglik = lambda x, rv_x: -rv_x.log_prob(x)
+optimizer = tf.optimizers.Adam(learning_rate=1e-3)
+vae.model.compile(optimizer=optimizer,loss=negloglik)
+vae.encoder.summary()
+vae.decoder.summary()
 
-vae.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-3),
-            loss=negloglik)
-
-_ = vae.fit(train,
-            epochs=15,
-            validation_data=test)
-
-vae.save('vae')
+for epoch in range(15):
+    print(f'Epoch {epoch}/15')
+    epoch_loss = 0
+    b = 0
+    for batch in iter(training_data):
+        b+=1
+        with tf.GradientTape() as tape:
+            latent = vae.encoder(batch)
+            sample = latent.sample()
+            recon_dist = vae.decoder(latent)
+            loss = tf.reduce_mean(negloglik(tf.expand_dims(batch, -1), recon_dist))
+        gradients = tape.gradient(loss, vae.model.trainable_variables)
+        optimizer.apply_gradients(zip(gradients, vae.model.trainable_variables))
+        epoch_loss += loss.numpy()
+        print(epoch_loss/b)
