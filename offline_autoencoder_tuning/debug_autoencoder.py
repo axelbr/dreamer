@@ -13,9 +13,9 @@ tf.executing_eagerly = True
 tf.keras.backend.set_floatx('float64')
 
 epochs = 20
-batch_size = 32
+batch_size = 64
 learning_rate = 0.01
-shuffle_batch = 1000
+shuffle_batch = 10000
 encoded_obs_dim = 128
 lidar_shape = 1000
 
@@ -25,7 +25,7 @@ class MyLidarEncoder(tools.Module):
         self._output_dim = output_dim
 
     def __call__(self, obs):
-        kwargs = dict(strides=1, activation=self._act, padding='same')
+        kwargs = dict(strides=2, activation=self._act, padding='same')
         lidar = obs
         if type(obs)==dict:
             lidar = obs['lidar']
@@ -41,22 +41,42 @@ class MyLidarEncoder(tools.Module):
         shape = (*lidar.shape[:-1], *x.shape[1:])
         return tf.reshape(x, shape=shape)
 
+
+class MyLidarConvDecoder(tools.Module):
+    def __init__(self, output_dim, act=tf.nn.relu):
+        self._act = act
+        self._output_dim = output_dim
+
+    def __call__(self, features):
+        kwargs = dict(strides=2, activation=self._act, padding='same')
+        params = tfpl.IndependentNormal.params_size(self._output_dim)
+        x = tf.expand_dims(features, -1)
+        x = self.get('deconv1', tf.keras.layers.Conv1DTranspose, input_shape=(encoded_obs_dim, 1),
+                                                                 filters=4, kernel_size=5, **kwargs)(x)
+        x = self.get('deconv1', tf.keras.layers.Conv1DTranspose, filters=2, kernel_size=5, **kwargs)(x)
+        x = self.get('flat', tf.keras.layers.Flatten)(x)
+        x = self.get('params', tf.keras.layers.Dense, params, activation=self._act)(x)
+        x = self.get('dist', tfpl.IndependentNormal, event_shape=self._output_dim)(x)
+        dist = tfd.BatchReshape(x, batch_shape=features.shape[:1])
+        return dist
+
+
 class MyLidarDecoder(tools.Module):
-      def __init__(self, output_dim, act=tf.nn.relu):
-            self._act = act
-            self._output_dim = output_dim
+    def __init__(self, output_dim, act=tf.nn.relu):
+        self._act = act
+        self._output_dim = output_dim
 
-      def __call__(self, features):
-            params = tfpl.IndependentNormal.params_size(self._output_dim)
-            x = tf.reshape(features, shape=(-1, *features.shape[1:]))
-            x = self.get('params', tf.keras.layers.Dense, params, activation=self._act)(x)
-            x = self.get('dist', tfpl.IndependentNormal, event_shape=self._output_dim)(x)
-            dist = tfd.BatchReshape(x, batch_shape=features.shape[:1])
-            return dist
+    def __call__(self, features):
+        params = tfpl.IndependentNormal.params_size(self._output_dim)
+        x = tf.reshape(features, shape=(-1, *features.shape[1:]))
+        x = self.get('params', tf.keras.layers.Dense, params, activation=self._act)(x)
+        x = self.get('dist', tfpl.IndependentNormal, event_shape=self._output_dim)(x)
+        dist = tfd.BatchReshape(x, batch_shape=features.shape[:1])
+        return dist
 
-class Autoencoder(tools.Module):
+class BaselineAutoencoder(tools.Module):
     def __init__(self, latent_dim, original_dim):
-        super(Autoencoder, self).__init__()
+        super(BaselineAutoencoder, self).__init__()
         self.encoder = MyLidarEncoder(output_dim=latent_dim)
         self.decoder = MyLidarDecoder(output_dim=original_dim)
 
@@ -64,6 +84,22 @@ class Autoencoder(tools.Module):
         latent = self.encoder({'lidar': input})
         reconstructed = self.decoder(latent)
         return reconstructed
+
+class AutoencoderWtDeconvolution(tools.Module):
+    def __init__(self, latent_dim, original_dim):
+        super(AutoencoderWtDeconvolution, self).__init__()
+        self.encoder = MyLidarEncoder(output_dim=latent_dim)
+        self.decoder = MyLidarConvDecoder(output_dim=original_dim)
+
+    def __call__(self, input):
+        latent = self.encoder({'lidar': input})
+        reconstructed = self.decoder(latent)
+        return reconstructed
+
+def preprocess(sample, obs_field='lidar', obs_max_val=5.0):
+    image = tf.cast(sample[obs_field], tf.float32) / obs_max_val  # Scale to unit interval.
+    image = image < tf.random.uniform(tf.shape(image))  # Randomly binarize.
+    return image, image
 
 def loss(model, original):
     image_pred = model(original)
@@ -82,22 +118,28 @@ output_dir = os.path.join("offline_autoencoder_tuning", "out")
 dataset_filename = "dataset_random_starts_austria_2000episodes_1000maxobs.h5"
 data = h5.File(os.path.join(output_dir, dataset_filename), "r")
 # prepare dataset
-all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())[:200]])
-data = tf.data.Dataset.from_tensor_slices(all_obs).shuffle(shuffle_batch)
+all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())[:10]])
+data = tf.data.Dataset.from_tensor_slices(all_obs)
 test_size = 100    # just to create gif
 val_data = data.take(test_size)
 train_data = data.skip(test_size)
 # model def
-autoencoder = Autoencoder(encoded_obs_dim, lidar_shape)
+#autoencoder = BaselineAutoencoder(encoded_obs_dim, lidar_shape)
+autoencoder = AutoencoderWtDeconvolution(encoded_obs_dim, lidar_shape)
 opt = tf.optimizers.Adam(learning_rate=learning_rate)
-# TODO: not working with keras 'fit' for some issue wt type (it found a tuple during training)
-#autoencoder.compile(opt, loss)
-#autoencoder.fit(all_obs, all_obs, epochs=epochs, batch_size=batch_size, shuffle=True, verbose=2)
 
-train_data = train_data.batch(batch_size)
+train_data = train_data.shuffle(shuffle_batch).batch(batch_size)
 val_data = val_data.batch(batch_size)
 init = time.time()
 for epoch in range(epochs):
+    if epoch % 10 == 0:
+        for step, batch_features in enumerate(val_data):
+            if (step % 10 == 0):
+                print("\tTest: {}/{}".format(step + 1, len(val_data)))
+            latent = autoencoder.encoder(batch_features)
+            reconstructed = autoencoder(batch_features)
+            _image_summaries(batch_features, latent, reconstructed, name="{}_{}".format(epoch + 1, step + 1))
+
     print("{}/{} => init time: {:.3f}s".format(epoch + 1, epochs, time.time()-init))
     init = time.time()
     for step, batch_features in enumerate(train_data):
@@ -112,8 +154,7 @@ for step, batch_features in enumerate(val_data):
         print("\tTest: {}/{}".format(step + 1, len(val_data)))
     latent = autoencoder.encoder(batch_features)
     reconstructed = autoencoder(batch_features)
-    _image_summaries(batch_features, latent, reconstructed, name="{}_{}".format(epoch+1, step+1))
-
+    _image_summaries(batch_features, latent, reconstructed, name="{}_{}".format(epoch + 1, step + 1))
 """
 timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
 autoencoder.save("offline_autoencoder_tuning/models/autoencoder_{}".format(timestamp))

@@ -18,4 +18,4 @@ def gif_summary(video, name="", fps=30):
     frames = []
     for i in range(video.shape[0]):
         frames.append(video[i].numpy().astype(np.uint8))
-    imageio.mimsave("offline_autoencoder_tuning/gif/lidar_{}.gif".format(name), frames)
+    imageio.mimsave("offline_autoencoder_tuning/gif/seq_lidar_{}.gif".format(name), frames)
