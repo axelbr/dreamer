@@ -123,7 +123,7 @@ lidar_file = "data/pretraining_austria_single.h5"
 n_epochs = 10
 batch_size = 128
 lr = 0.001
-lidar_rays = 1000
+lidar_rays = 1080
 
 training_data, test_data = load_lidar(lidar_file, train=0.8, shuffle=True)
 training_data = training_data\
@@ -145,20 +145,25 @@ vae.encoder.summary()
 vae.decoder.summary()
 
 init = time.time()
-for epoch in range(n_epochs):
-    print(f'Epoch {epoch}/{n_epochs}')
-    epoch_loss = 0
-    b = 0
-    for batch in iter(training_data):
-        b += 1
-        with tf.GradientTape() as tape:
-            recon_dist = vae.model(batch)
-            loss = tf.reduce_mean(negloglik(tf.expand_dims(batch, -1), recon_dist))
-        gradients = tape.gradient(loss, vae.model.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, vae.model.trainable_variables))
-        epoch_loss += loss.numpy()
-        if b % 10 == 0:
-            print("epoch {}, batch {} => avg loss {:.3f}".format(epoch, b, epoch_loss / b))
+writer = tf.summary.create_file_writer('tmp')
+with writer.as_default():
+    with tf.summary.record_if(True):
+        for epoch in range(n_epochs):
+            print(f'Epoch {epoch}/{n_epochs}')
+            epoch_loss = 0
+            b = 0
+            for step, batch in enumerate(iter(training_data)):
+                b += 1
+                with tf.GradientTape() as tape:
+                    latent = vae.encoder(batch)
+                    recon_dist = vae.decoder(latent.sample())
+                    loss = tf.reduce_mean(negloglik(tf.expand_dims(batch, -1), recon_dist))
+                tf.summary.scalar('loss', loss, step=step)
+                gradients = tape.gradient(loss, vae.model.trainable_variables)
+                optimizer.apply_gradients(zip(gradients, vae.model.trainable_variables))
+                epoch_loss += loss.numpy()
+                if b % 10 == 0:
+                    print("epoch {}, batch {} => avg loss {:.3f}".format(epoch, b, epoch_loss / b))
 print("[Info] Training completed in {:.3}s".format(time.time()-init))
 
 init = time.time()
