@@ -29,7 +29,6 @@ def collect_pretraining_data(filename: str, timesteps: int, env):
         storage.save(episode)
 
 
-
 if __name__ == '__main__':
     scenario = 'austria_single'
     env = SingleRaceCarWrapper(name=scenario, id='A', rendering=False)
