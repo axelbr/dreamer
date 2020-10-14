@@ -87,14 +87,34 @@ def lidar_to_image(scan):
 
 import imageio
 from PIL import Image
-def gif_summary(video, fps=30):
+def gif_summary(video, fps=30, name="lidar"):
   frames = []
   video = tf.concat([video[v, :] for v in range(video.shape[0])], axis=2)
   for i in range(video.shape[0]):
-    frames.append(video[i].numpy())
-  imageio.mimsave('./lidar.gif', frames)
+    frames.append(video[i].numpy().astype(np.uint8))
+  imageio.mimsave('./{}.gif'.format(name), frames)
 
+def flat_gif_summary(video, fps=30, name="lidar"):
+  frames = []
+  for i in range(video.shape[0]):
+    frames.append(video[i].numpy().astype(np.uint8))
+  imageio.mimsave('./{}.gif'.format(name), frames)
 
+def create_reconstruction_gif(lidar, embed, recon_dist, normalized=True, name="lidar"):
+  recon = recon_dist.mode()
+  if len(lidar.shape) < 3:
+    lidar = tf.expand_dims(lidar, axis=0)
+  if len(recon.shape) < 3:
+    recon = tf.expand_dims(recon, axis=0)
+  else:
+    recon = tf.reshape(recon, [1, *recon.shape[:2]])
+  if normalized:
+    lidar = lidar * 5.0
+    recon = recon * 5.0
+  lidar_img = lidar_to_image(tf.cast(lidar, dtype='float16'))
+  recon_img = lidar_to_image(tf.cast(recon, dtype='float16'))
+  video = tf.concat([lidar_img, recon_img], 1)
+  flat_gif_summary(video, name=name)
 
 def video_summary(name, video, step=None, fps=20):
   name = name if isinstance(name, str) else name.decode('utf-8')
