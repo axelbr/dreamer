@@ -6,6 +6,5 @@ __pycache__/
 venv
 .idea
 *gif
-racing_dreamer/data/*
 MUJOCO_LOG.TXT
 /offline_autoencoder_tuning/out/
