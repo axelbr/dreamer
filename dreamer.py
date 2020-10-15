@@ -34,7 +34,7 @@ from datetime import datetime
 def define_config():
   config = tools.AttrDict()
   # General.
-  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().toordinal()))
+  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y%m_%d%H_%M%S')))
   config.seed = 0
   config.steps = 5e6
   config.eval_every = 1e4
