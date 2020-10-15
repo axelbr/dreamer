@@ -109,7 +109,7 @@ def preprocess(x, max=5.0):
     sample = tf.cast(x, tf.float32) / max
     return sample
 
-lidar_file = "../offline_autoencoder_tuning/out/dataset_random_starts_austria_2000episodes_1000maxobs.h5"
+lidar_file = "original_pretraining_austria_single.h5"
 n_epochs = 10
 batch_size = 128
 lr = 0.001
