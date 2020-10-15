@@ -100,8 +100,11 @@ def flat_gif_summary(video, fps=30, name="lidar"):
     frames.append(video[i].numpy().astype(np.uint8))
   imageio.mimsave('./{}.gif'.format(name), frames)
 
-def create_reconstruction_gif(lidar, embed, recon_dist, normalized=True, name="lidar"):
-  recon = recon_dist.mode()
+def create_reconstruction_gif(lidar, embed, recon_dist, distribution=True, normalized=True, name="lidar"):
+  if not distribution:
+    recon = recon_dist
+  else:
+    recon = recon_dist.mode()
   if len(lidar.shape) < 3:
     lidar = tf.expand_dims(lidar, axis=0)
   if len(recon.shape) < 3:

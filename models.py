@@ -101,6 +101,43 @@ class LidarEncoder(tools.Module):
     shape = (*lidar.shape[:-1], *x.shape[1:])
     return tf.reshape(x, shape=shape)
 
+class MLPLidarEncoder(tools.Module):
+  def __init__(self,  output_dim, act=tf.nn.relu):
+    self._act = act
+    self._output_dim = output_dim
+    self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(self._output_dim), scale=1),
+                                 reinterpreted_batch_ndims=1)
+  def __call__(self, obs):
+    lidar = obs['lidar']
+    if len(lidar.shape) > 2:
+      x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:], 1))
+    else:
+      x = tf.expand_dims(lidar, axis=-1)
+    x = self.get('dense1', tfkl.Dense, units=128, activation=self._act)(x)
+    x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
+    x = self.get('dense3', tfkl.Dense, units=tfpl.MultivariateNormalTriL.params_size(self._output_dim))(x)
+    x = tfpl.MultivariateNormalTriL(self._output_dim, activity_regularizer=tfpl.KLDivergenceRegularizer(self.prior)),
+    shape = (*lidar.shape[:-1], *x.shape[1:])
+    return tf.reshape(x, shape=shape)
+
+class MLPLidarDecoder(tools.Module):
+  def __init__(self, output_dim, shape, act=tf.nn.relu):
+    self._act = act
+    self._output_dim = output_dim
+    self._shape = shape
+
+
+  def __call__(self, features):
+    params = tfpl.MultivariateNormalTriL.params_size(self._output_dim)
+    x = tf.reshape(features, shape=(-1, *features.shape[2:]))
+    x = self.get('params', tfkl.Dense, params, activation=self._act)(x)
+    x = self.get('dense1', tfkl.Dense, units=64, activation=self._act)(x)
+    x = self.get('dense2', tfkl.Dense, units=128, activation=self._act)(x)
+    x = self.get('dense3', tfkl.Dense, units=1080, activation=tf.nn.leaky_relu)(x)
+    mean = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
+    return tfd.Independent(tfd.Normal(mean, 1), len(self._shape))
+    return x
+
 class ConvEncoder(tools.Module):
 
   def __init__(self, depth=32, act=tf.nn.relu):
