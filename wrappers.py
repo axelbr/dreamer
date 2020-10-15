@@ -46,8 +46,8 @@ class SingleRaceCarWrapper:
 
   def reset(self):
     obs = self.env.reset()
-    if 'rgb_camera' in obs[self._id]:
-      obs[self._id]['image'] = obs[self._id]['rgb_camera']
+    if 'low_res_camera' in obs[self._id]:
+      obs[self._id]['image'] = obs[self._id]['low_res_camera']
     return obs[self._id]
 
 

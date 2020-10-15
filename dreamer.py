@@ -43,12 +43,12 @@ def define_config():
   config.log_images = True
   config.gpu_growth = True
   config.precision = 16
-  config.obs_type = 'image'
+  config.obs_type = 'lidar'
   # Environment.
   config.task = 'dmc_walker_walk'
   config.envs = 1
   config.parallel = 'none'
-  config.action_repeat = 2
+  config.action_repeat = 4
   config.time_limit = 3000
   config.prefill = 5000
   config.eval_noise = 0.0
@@ -222,7 +222,8 @@ class Dreamer(tools.Module):
             model_loss, value_loss, actor_loss, model_norm, value_norm,
             actor_norm)
       if tf.equal(log_images, True):
-        self._image_summaries(data, embed, image_pred)
+        #self._image_summaries(data, embed, image_pred)
+        pass
 
   def _build_model(self):
     acts = dict(
