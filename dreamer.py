@@ -29,7 +29,7 @@ import models
 import tools
 import wrappers
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
@@ -54,7 +54,7 @@ def define_config():
   config.eval_noise = 0.0
   config.clip_rewards = 'none'
   # Model.
-  config.encoded_obs_dim = 1024
+  config.encoded_obs_dim = 8
   config.deter_size = 200
   config.stoch_size = 30
   config.num_units = 400
@@ -236,9 +236,9 @@ class Dreamer(tools.Module):
       self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
     elif self._c.obs_type == 'lidar':
       #self._encode = models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
-      self._encode = models.MLPLidarEncoder(self._c.cnn_depth, cnn_act)
+      self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
       #self._decode = models.LidarDecoder(output_dim=self._obspace['lidar'].shape)
-      self._decode = models.MLPLidarDecoder(self._c.cnn_depth, cnn_act)
+      self._decode = models.MLPLidarDecoder(self._c.encoded_obs_dim, cnn_act)
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
 

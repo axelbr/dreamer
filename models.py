@@ -113,7 +113,7 @@ class MLPLidarEncoder(tools.Module):
     else:
       lidar = obs
     if len(lidar.shape) > 2:
-      x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:], 1))
+      x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:]))
     else:
       x = lidar
     x = tfkl.Lambda(lambda x: tf.cast(x, tf.float32) - 0.5)(x)
