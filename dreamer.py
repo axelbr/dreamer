@@ -29,12 +29,12 @@ import models
 import tools
 import wrappers
 
-tf.config.run_functions_eagerly(run_eagerly=True)
+#tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
   # General.
-  config.logdir = pathlib.Path('.')
+  config.logdir = pathlib.Path('./logs/racecar/')
   config.seed = 0
   config.steps = 5e6
   config.eval_every = 1e4
