@@ -12,12 +12,12 @@ envs = {}
 
 class SingleRaceCarWrapper:
 
-  def __init__(self, name, id, size=(100,)):
+  def __init__(self, name, id, size=(100,), rendering=True):
     import racecar_gym
     if name not in envs.keys():
       scenario = racecar_gym.MultiAgentScenario.from_spec(
         path=f'scenario/{name}.yml',
-        rendering=True
+        rendering=rendering
       )
       envs[name] = racecar_gym.MultiAgentRaceCarEnv(scenario=scenario)
 

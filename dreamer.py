@@ -110,8 +110,7 @@ class Dreamer(tools.Module):
     self._float = prec.global_policy().compute_dtype
     self._strategy = tf.distribute.MirroredStrategy()
     with self._strategy.scope():
-      self._dataset = iter(self._strategy.experimental_distribute_dataset(
-          load_dataset(datadir, self._c)))
+      self._dataset = iter(self._strategy.experimental_distribute_dataset(load_dataset(datadir, self._c)))
       self._build_model()
 
   def __call__(self, obs, reset, state=None, training=True):
@@ -224,10 +223,12 @@ class Dreamer(tools.Module):
         leaky_relu=tf.nn.leaky_relu)
     cnn_act = acts[self._c.cnn_act]
     act = acts[self._c.dense_act]
-    self._encode = models.ConvEncoder(self._c.cnn_depth, cnn_act)
+    #self._encode = models.ConvEncoder(self._c.cnn_depth, cnn_act)
+    self._encode = models.MLPLidarEncoder(self._c.cnn_depth, cnn_act)
     self._dynamics = models.RSSM(
         self._c.stoch_size, self._c.deter_size, self._c.deter_size)
-    self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
+    #self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
+    self._decode = models.MLPLidarDecoder(self._c.cnn_depth, cnn_act)
     self._reward = models.DenseDecoder((), 2, self._c.num_units, act=act)
     if self._c.pcont:
       self._pcont = models.DenseDecoder(
@@ -246,7 +247,7 @@ class Dreamer(tools.Module):
     self._value_opt = Optimizer('value', [self._value], self._c.value_lr)
     self._actor_opt = Optimizer('actor', [self._actor], self._c.actor_lr)
     # Do a train step to initialize all variables, including optimizer
-    # statistics. Ideally, we would use batch size zero, but that doesn't work
+    # statistics. Ideally, we would use batch slidarencoderize zero, but that doesn't work
     # in multi-GPU mode.
     self.train(next(self._dataset))
 
@@ -405,7 +406,7 @@ def make_env(config, writer, prefix, datadir, store):
     env = wrappers.OneHotAction(env)
   elif suite == 'racecar':
     import racecar_gym
-    env = wrappers.SingleRaceCarWrapper(id='A', name=task)
+    env = wrappers.SingleRaceCarWrapper(id='A', name=task, rendering=False)
     env = wrappers.ActionRepeat(env, config.action_repeat)
   else:
     raise NotImplementedError(suite)
