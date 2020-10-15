@@ -125,7 +125,9 @@ class MLPLidarEncoder(tools.Module):
     x = self.get('dense3', tfkl.Dense, units=tfpl.MultivariateNormalTriL.params_size(self._output_dim))(x)
     dist = tfpl.MultivariateNormalTriL(self._output_dim, activity_regularizer=tfpl.KLDivergenceRegularizer(self.prior))(
       x)
-    return dist.sample()
+    x = dist.sample()
+    shape = (*lidar.shape[:-1], *x.shape[1:])
+    return tf.reshape(x, shape=shape)
 
 class MLPLidarDecoder(tools.Module):
   def __init__(self, latent_dim, shape, act=tf.nn.relu):
