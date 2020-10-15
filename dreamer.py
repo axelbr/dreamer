@@ -28,13 +28,13 @@ sys.path.append(str(pathlib.Path(__file__).parent))
 import models
 import tools
 import wrappers
-
+from datetime import datetime
 #tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
   # General.
-  config.logdir = pathlib.Path('./logs/racecar/')
+  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().toordinal()))
   config.seed = 0
   config.steps = 5e6
   config.eval_every = 1e4
@@ -474,7 +474,7 @@ def main(config):
   gapfollower = gap_follower.GapFollower()
 
   random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
-  tools.simulate(random_agent, train_envs, prefill / config.action_repeat)
+  tools.simulate(gapfollower, train_envs, prefill / config.action_repeat)
   writer.flush()
 
   # Train and regularly evaluate the agent.
