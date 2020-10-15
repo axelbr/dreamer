@@ -114,18 +114,18 @@ class MLPLidarEncoder(tools.Module):
     else:
       lidar = obs
     if len(lidar.shape) > 2:
-      x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:]))
+      x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:], 1))
     else:
       x = lidar
     #x = tfkl.Lambda(lambda x: tf.cast(x, tf.float32) - 0.5)(x)
-    x = tfkl.Lambda(lambda x: x - 0.5)(x)
+    #x = tfkl.Lambda(lambda x: x - 0.5)(x)
+    x = self.get('flat', tfkl.Flatten)(x)
     x = self.get('dense1', tfkl.Dense, units=128, activation=self._act)(x)
     x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
     x = self.get('dense3', tfkl.Dense, units=tfpl.MultivariateNormalTriL.params_size(self._output_dim))(x)
-    x = tf.cast(x, dtype='float32')
     dist = tfpl.MultivariateNormalTriL(self._output_dim, activity_regularizer=tfpl.KLDivergenceRegularizer(self.prior))(
       x)
-    return tf.cast(dist.sample(), dtype='float16')
+    return dist.sample()
 
 class MLPLidarDecoder(tools.Module):
   def __init__(self, latent_dim, shape, act=tf.nn.relu):

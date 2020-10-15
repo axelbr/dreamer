@@ -42,7 +42,7 @@ def define_config():
   config.log_scalars = True
   config.log_images = True
   config.gpu_growth = True
-  config.precision = 16
+  config.precision =32
   config.obs_type = 'lidar'
   # Environment.
   config.task = 'racecar_MultiAgentAustria'
@@ -366,6 +366,7 @@ def preprocess(obs, config):
   obs = obs.copy()
   with tf.device('cpu:0'):
     obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
+    obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
     obs['reward'] = clip_rewards(obs['reward'])
   return obs
