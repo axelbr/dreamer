@@ -109,11 +109,11 @@ def preprocess(x, max=5.0):
     sample = tf.cast(x, tf.float32) / max
     return sample
 
-lidar_file = "original_pretraining_austria_single.h5"
+lidar_file = "pretraining_austria_single_wt_4_action_repeat.h5"
 n_epochs = 10
 batch_size = 128
 lr = 0.001
-lidar_rays = 1000
+lidar_rays = 1080
 
 training_data, test_data = load_lidar(lidar_file, train=0.8, shuffle=True)
 training_data = training_data\
@@ -165,7 +165,8 @@ b = 0
 for batch in iter(test_data):
     b += 1
     recon_dist = vae(batch)
-    tools.create_reconstruction_gif(batch, None, recon_dist, distribution=True, name="cvae_lidar_{}".format(b+1))
+    tools.create_reconstruction_gif(batch, None, recon_dist,
+                                    distribution=True, name="mlp_vae_4actionrepeat_lidar_{}epochs_{}".format(n_epochs, b))
     loss = tf.reduce_mean(negloglik(batch, recon_dist))
     #loss = tf.reduce_mean(tf.losses.mse(tf.expand_dims(batch, -1), recon_dist))
     test_loss += loss.numpy()
