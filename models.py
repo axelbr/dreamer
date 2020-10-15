@@ -105,7 +105,8 @@ class MLPLidarEncoder(tools.Module):
   def __init__(self, latent_dim, act=tf.nn.relu):
     self._act = act
     self._output_dim = latent_dim
-    self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(self._output_dim), scale=1), reinterpreted_batch_ndims=1)
+    self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(self._output_dim), scale=1),
+                                 reinterpreted_batch_ndims=1, dtype="float16")
 
   def __call__(self, obs):
     if type(obs) == dict:
