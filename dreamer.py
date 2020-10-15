@@ -68,7 +68,7 @@ def define_config():
   config.weight_decay = 0.0
   config.weight_decay_pattern = r'.*'
   # Training.
-  config.batch_size = 50
+  config.batch_size = 64
   config.batch_length = 50
   config.train_every = 1000
   config.train_steps = 100
@@ -236,9 +236,9 @@ class Dreamer(tools.Module):
       self._encode = models.ConvEncoder(self._c.cnn_depth, cnn_act)
       self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
     elif self._c.obs_type == 'lidar':
-      self._encode = models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
-      #self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
-      self._decode = models.LidarDecoder(output_dim=self._obspace['lidar'].shape)
+      #self._encode = models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
+      self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
+      self._decode = models.MLPLidarDecoder(self._c.encoded_obs_dim, output_dim=self._obspace['lidar'].shape)
       #self._decode = models.MLPLidarDecoder(self._c.encoded_obs_dim, cnn_act)
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)

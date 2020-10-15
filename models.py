@@ -130,21 +130,18 @@ class MLPLidarEncoder(tools.Module):
     return tf.reshape(x, shape=shape)
 
 class MLPLidarDecoder(tools.Module):
-  def __init__(self, latent_dim, shape, act=tf.nn.relu):
+  def __init__(self, latent_dim, output_dim, act=tf.nn.relu):
     self._act = act
-    self._output_dim = latent_dim
-    self._shape = shape
+    self._output_dim = output_dim
     self.std_dev = 1
 
   def __call__(self, features):
-    #params = tfpl.MultivariateNormalTriL.params_size(self._output_dim)
-    #x = tf.reshape(features, shape=(-1, *features.shape[2:]))
-    x = features
-    x = self.get('params', tfkl.Dense, self._output_dim, activation=self._act)(x)
-    x = self.get('dense1', tfkl.Dense, units=64, activation=self._act)(x)
-    x = self.get('dense2', tfkl.Dense, units=128, activation=self._act)(x)
-    #mean = self.get('dense3', tfkl.Dense, units=self._shape[0], activation=tf.nn.leaky_relu)(x)
-    #return tfd.Independent(tfd.Normal(mean, self.std_dev))
+    params = tfpl.IndependentNormal.params_size(self._output_dim[0])
+    x = tf.reshape(features, shape=(-1, *features.shape[2:]))
+    x = self.get('dense1', tfkl.Dense, features.shape[2], activation=self._act)(x)
+    x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
+    x = self.get('dense3', tfkl.Dense, units=128, activation=self._act)(x)
+    x = self.get('params', tfkl.Dense, units=params, activation=tf.nn.leaky_relu)(x)
     x = self.get('dist', tfpl.IndependentNormal, event_shape=self._output_dim[0])(x)
     dist = tfd.BatchReshape(x, batch_shape=features.shape[:2])
     return dist

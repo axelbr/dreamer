@@ -33,12 +33,12 @@ class Module(tf.Module):
       values = pickle.load(f)
     tf.nest.map_structure(lambda x, y: x.assign(y), self.variables, values)
 
-  def get(self, name, ctor, *args, **kwargs):
+  def get(self, name, actor, *args, **kwargs):
     # Create or get layer by name to avoid mentioning it in the constructor.
     if not hasattr(self, '_modules'):
       self._modules = {}
     if name not in self._modules:
-      self._modules[name] = ctor(*args, **kwargs)
+      self._modules[name] = actor(*args, **kwargs)
     return self._modules[name]
 
 
