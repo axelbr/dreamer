@@ -238,7 +238,7 @@ class Dreamer(tools.Module):
     elif self._c.obs_type == 'lidar':
       #self._encode = models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
       self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
-      self._decode = models.MLPLidarDecoder(self._c.encoded_obs_dim, output_dim=self._obspace['lidar'].shape)
+      self._decode = models.MLPLidarDecoder(output_dim=self._obspace['lidar'].shape)
       #self._decode = models.MLPLidarDecoder(self._c.encoded_obs_dim, cnn_act)
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
