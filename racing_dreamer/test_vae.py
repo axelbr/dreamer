@@ -90,8 +90,15 @@ negloglik = lambda x, rv_x: -rv_x.log_prob(x)
 
 model_name = "MLP_CVAE_NormDist_stddev80"
 vae = MLP_CVAE_Dist(input_shape=(lidar_rays, 1))
+
+init = time.time()
+batch = next(iter(training_data))
+recon_dist = vae(batch)
 vae.encoder.load("models/pretrained_encoder")
 vae.decoder.load("models/pretrained_decoder")
+print("[Info] Loaded models")
+
+
 
 init = time.time()
 test_loss = 0
