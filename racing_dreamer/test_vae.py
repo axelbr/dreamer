@@ -3,67 +3,12 @@ import tensorflow_probability as tfp
 from racing_dreamer.dataset import load_lidar
 import tools
 import time
+from racing_dreamer.pretraining_lidar import MLP_CVAE_Dist
 
 tfk = tf.keras
 tfkl = tf.keras.layers
 tfpl = tfp.layers
 tfd = tfp.distributions
-
-class MLPLidarEncoder(tools.Module):
-  def __init__(self,  output_dim, act=tf.nn.relu):
-    self._act = act
-    self._output_dim = output_dim
-    self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(self._output_dim), scale=1),
-                                 reinterpreted_batch_ndims=1)
-  def __call__(self, obs):
-    if type(obs) == dict:
-        lidar = obs['lidar']
-    else:
-        lidar = obs
-    if len(lidar.shape) > 2:
-      x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:], 1))
-    else:
-      x = lidar
-    x = tfkl.Lambda(lambda x: tf.cast(x, tf.float32) - 0.5)(x)
-    x = self.get('dense1', tfkl.Dense, units=128, activation=self._act)(x)
-    x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
-    x = self.get('dense3', tfkl.Dense, units=tfpl.MultivariateNormalTriL.params_size(self._output_dim))(x)
-    x = tfpl.MultivariateNormalTriL(self._output_dim, activity_regularizer=tfpl.KLDivergenceRegularizer(self.prior))(x)
-    return x
-
-class MLPLidarDecoder(tools.Module):
-  def __init__(self, output_dim, shape, act=tf.nn.relu):
-    self._act = act
-    self._output_dim = output_dim
-    self._shape = shape
-
-
-  def __call__(self, features):
-    #params = tfpl.MultivariateNormalTriL.params_size(self._output_dim)
-    #x = tf.reshape(features, shape=(-1, *features.shape[2:]))
-    x = features
-    x = self.get('params', tfkl.Dense, self._output_dim, activation=self._act)(x)
-    x = self.get('dense1', tfkl.Dense, units=64, activation=self._act)(x)
-    x = self.get('dense2', tfkl.Dense, units=128, activation=self._act)(x)
-    x = self.get('dense3', tfkl.Dense, units=self._shape[0], activation=tf.nn.leaky_relu)(x)
-    mean = x
-    return mean
-
-class MLP_CVAE_Dist(tools.Module):
-    def __init__(self, input_shape, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        encoded_size = 8
-
-        self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(encoded_size), scale=1),
-                                     reinterpreted_batch_ndims=1)
-
-        self.encoder = MLPLidarEncoder(encoded_size)
-        self.decoder = MLPLidarDecoder(encoded_size, input_shape)
-
-    def __call__(self, features):
-        z = self.encoder(features)
-        m = self.decoder(z.sample())
-        return tfd.Independent(tfd.Normal(m, 1))
 
 def preprocess(x, max=5.0):
     sample = tf.cast(x, tf.float32) / max
@@ -94,9 +39,9 @@ vae = MLP_CVAE_Dist(input_shape=(lidar_rays, 1))
 init = time.time()
 batch = next(iter(training_data))
 recon_dist = vae(batch)
-vae.encoder.load("models/pretrained_encoder")
-vae.decoder.load("models/pretrained_decoder")
-print("[Info] Loaded models")
+vae.encoder.load("pretrained_models/pretrained_encoder")
+vae.decoder.load("pretrained_models/pretrained_decoder")
+print("[Info] Loaded pretrained_models")
 
 
 

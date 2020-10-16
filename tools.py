@@ -63,12 +63,12 @@ def graph_summary(writer, fn, *args):
 
 def lidar_to_image(scan):
   angles = tf.linspace(-math.radians(270.0 / 2), math.radians(270.0 / 2), scan.shape[-1])
-  angles = tf.cast(angles, tf.float16)
+  #angles = tf.cast(angles, tf.float16)
   images = []
   for i in range(scan.shape[1]):
     x = scan[0, i, :] * tf.cos(angles)
     y = scan[0, i, :] * tf.sin(angles)
-      #plt.scatter(x, y)
+    #plt.scatter(x, y)
 
     fig = plt.figure(figsize=(1.5, 1.5), dpi=150)
     ax = fig.add_subplot(111)
@@ -114,8 +114,8 @@ def create_reconstruction_gif(lidar, embed, recon_dist, distribution=True, norma
   if normalized:
     lidar = lidar * 5.0
     recon = recon * 5.0
-  lidar_img = lidar_to_image(tf.cast(lidar, dtype='float16'))
-  recon_img = lidar_to_image(tf.cast(recon, dtype='float16'))
+  lidar_img = lidar_to_image(lidar)
+  recon_img = lidar_to_image(recon)
   video = tf.concat([lidar_img, recon_img], 1)
   flat_gif_summary(video, name=name)
 

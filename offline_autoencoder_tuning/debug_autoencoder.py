@@ -157,5 +157,5 @@ for step, batch_features in enumerate(val_data):
     _image_summaries(batch_features, latent, reconstructed, name="{}_{}".format(epoch + 1, step + 1))
 """
 timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
-autoencoder.save("offline_autoencoder_tuning/models/autoencoder_{}".format(timestamp))
+autoencoder.save("offline_autoencoder_tuning/pretrained_models/autoencoder_{}".format(timestamp))
 """

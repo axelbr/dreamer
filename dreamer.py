@@ -41,10 +41,10 @@ def define_config():
   config.eval_every = 1e4
   config.log_every = 1e3
   config.log_scalars = True
-  config.log_images = True
+  config.log_images = False
   config.gpu_growth = True
   config.precision = 32
-  config.obs_type = 'image'
+  config.obs_type = 'lidar'
   # Environment.
   config.task = 'racecar_MultiAgentAustria'
   config.envs = 1
@@ -55,7 +55,7 @@ def define_config():
   config.eval_noise = 0.0
   config.clip_rewards = 'none'
   # Model.
-  config.encoded_obs_dim = 1024
+  config.encoded_obs_dim = 16
   config.deter_size = 200
   config.stoch_size = 30
   config.num_units = 400
@@ -68,6 +68,10 @@ def define_config():
   config.pcont_scale = 10.0
   config.weight_decay = 0.0
   config.weight_decay_pattern = r'.*'
+  # Pretrained model
+  config.use_pretrained_encoder = False
+  config.check_load_pretrained_encoder = tools.Once() if config.use_pretrained_encoder else lambda : False
+  config.pretrained_encoder_path = "racing_dreamer/pretrained_models/pretrained_encoder"
   # Training.
   config.batch_size = 64
   config.batch_length = 50
@@ -171,6 +175,9 @@ class Dreamer(tools.Module):
   def _train(self, data, log_images):
     with tf.GradientTape() as model_tape:
       embed = self._encode(data)
+      if self._c.check_load_pretrained_encoder():   # since eager execution, the first call builds the model
+        self._encode.load(self._c.pretrained_encoder_path)
+        embed = self._encode(data)
       post, prior = self._dynamics.observe(embed, data['action'])
       feat = self._dynamics.get_feat(post)
       image_pred = self._decode(feat)
@@ -236,10 +243,10 @@ class Dreamer(tools.Module):
       self._encode = models.ConvEncoder(self._c.cnn_depth, cnn_act)
       self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
     elif self._c.obs_type == 'lidar':
-      #self._encode = models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
+      #self._encode = pretrained_models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
       self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
       self._decode = models.MLPLidarDecoder(output_dim=self._obspace['lidar'].shape)
-      #self._decode = models.MLPLidarDecoder(self._c.encoded_obs_dim, cnn_act)
+      #self._decode = pretrained_models.MLPLidarDecoder(self._c.encoded_obs_dim, cnn_act)
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
 
@@ -341,8 +348,10 @@ class Dreamer(tools.Module):
       prior = self._dynamics.imagine(data['action'][:6, 5:], init)
       openl = self._decode(self._dynamics.get_feat(prior)).mode()
       model = tf.concat([recon[:, :5] + 0.5, openl + 0.5], 1)
-      error = (model - truth + 1) / 2
-      openl = tf.concat([truth, model, error], 2)
+      truth_img = tools.lidar_to_image(truth)
+      model_img = tools.lidar_to_image(model)
+      error = model_img - truth_img
+      openl = tf.concat([truth_img, model_img, error], 2)
       tools.graph_summary(self._writer, tools.video_summary, 'agent/openl', openl)
       #  self._writer, tools.video_summary, 'agent/openl', video)
 
