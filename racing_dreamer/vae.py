@@ -21,13 +21,13 @@ else:
   print('SUCCESS: Found GPU: {}'.format(tf.test.gpu_device_name()))
 
 def generator():
-    storage = ReplayStorage(filename='original_pretraining_austria_single.h5')
+    storage = ReplayStorage(filename='data/original_pretraining_austria_single.h5')
     for episode in storage:
         for transition in episode:
             yield transition.observation['image']
 
 
-file = 'original_pretraining_austria_single.h5'
+file = 'data/original_pretraining_austria_single.h5'
 dataset = tf.data.Dataset.from_generator(generator=generator, output_types=tf.int8)
 
 datasets = {

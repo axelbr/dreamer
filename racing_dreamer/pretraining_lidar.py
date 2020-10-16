@@ -109,7 +109,7 @@ def preprocess(x, max=5.0):
     sample = tf.cast(x, tf.float32) / max
     return sample
 
-lidar_file = "pretraining_austria_single_wt_4_action_repeat.h5"
+lidar_file = "data/pretraining_austria_single_wt_4_action_repeat.h5"
 n_epochs = 10
 batch_size = 128
 lr = 0.001
@@ -158,6 +158,9 @@ with writer.as_default():
                 if b % 50 == 0:
                     print("epoch {}, batch {} => avg loss {:.10f}".format(epoch, b, epoch_loss / b))
 print("[Info] Training completed in {:.3}s".format(time.time()-init))
+
+vae.encoder.save("pretrained_encoder")
+
 
 init = time.time()
 test_loss = 0

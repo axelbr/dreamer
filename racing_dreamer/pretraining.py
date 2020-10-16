@@ -22,7 +22,7 @@ def preprocess(x, max=255.0):
     sample = sample < tf.random.uniform(tf.shape(sample))
     return sample, sample
 
-file = 'original_pretraining_austria_single.h5'
+file = 'data/original_pretraining_austria_single.h5'
 lidar_dataset = tf.data.Dataset.from_generator(generator=generator(file=file), output_types=tf.float64)
 
 size = 48_000

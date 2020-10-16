@@ -29,12 +29,13 @@ import models
 import tools
 import wrappers
 from datetime import datetime
+
 #tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
   # General.
-  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y%m_%d%H_%M%S')))
+  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
   config.seed = 0
   config.steps = 5e6
   config.eval_every = 1e4
@@ -42,8 +43,8 @@ def define_config():
   config.log_scalars = True
   config.log_images = True
   config.gpu_growth = True
-  config.precision =32
-  config.obs_type = 'lidar'
+  config.precision = 32
+  config.obs_type = 'image'
   # Environment.
   config.task = 'racecar_MultiAgentAustria'
   config.envs = 1
@@ -54,7 +55,7 @@ def define_config():
   config.eval_noise = 0.0
   config.clip_rewards = 'none'
   # Model.
-  config.encoded_obs_dim = 8
+  config.encoded_obs_dim = 1024
   config.deter_size = 200
   config.stoch_size = 30
   config.num_units = 400
@@ -222,8 +223,7 @@ class Dreamer(tools.Module):
             model_loss, value_loss, actor_loss, model_norm, value_norm,
             actor_norm)
       if tf.equal(log_images, True):
-        # self._image_summaries(data, embed, image_pred)
-        pass
+        self._image_summaries(data, embed, image_pred)
 
   def _build_model(self):
     acts = dict(
@@ -334,7 +334,7 @@ class Dreamer(tools.Module):
       tools.graph_summary(
           self._writer, tools.video_summary, 'agent/openl', openl)
     elif self._c.obs_type == 'lidar':
-      truth = data['image'][:6] + 0.5
+      truth = data['lidar'][:6] + 0.5
       recon = image_pred.mode()[:6]
       init, _ = self._dynamics.observe(embed[:6, :5], data['action'][:6, :5])
       init = {k: v[:, -1] for k, v in init.items()}
