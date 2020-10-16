@@ -110,7 +110,7 @@ def preprocess(x, max=5.0):
     return sample
 
 lidar_file = "data/pretraining_austria_single_wt_4_action_repeat.h5"
-n_epochs = 10
+n_epochs = 5
 batch_size = 128
 lr = 0.001
 lidar_rays = 1080
@@ -159,7 +159,8 @@ with writer.as_default():
                     print("epoch {}, batch {} => avg loss {:.10f}".format(epoch, b, epoch_loss / b))
 print("[Info] Training completed in {:.3}s".format(time.time()-init))
 
-vae.encoder.save("pretrained_encoder")
+vae.encoder.save("models/pretrained_encoder")
+vae.decoder.save("models/pretrained_decoder")
 
 
 init = time.time()
