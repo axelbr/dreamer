@@ -110,7 +110,7 @@ def preprocess(x, max=5.0):
     return sample
 
 lidar_file = "data/pretraining_austria_single_wt_4_action_repeat.h5"
-n_epochs = 5
+n_epochs = 10
 batch_size = 128
 lr = 0.001
 lidar_rays = 1080
