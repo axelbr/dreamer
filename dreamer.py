@@ -41,7 +41,7 @@ def define_config():
   config.eval_every = 1e4
   config.log_every = 1e3
   config.log_scalars = True
-  config.log_images = False
+  config.log_images = True
   config.gpu_growth = True
   config.precision = 32
   config.obs_type = 'lidar'
@@ -230,7 +230,9 @@ class Dreamer(tools.Module):
             model_loss, value_loss, actor_loss, model_norm, value_norm,
             actor_norm)
       if tf.equal(log_images, True):
-        self._image_summaries(data, embed, image_pred)
+        #note: image summaries doesn t work with lidar observations
+        #self._image_summaries(data, embed, image_pred)
+        pass
 
   def _build_model(self):
     acts = dict(
