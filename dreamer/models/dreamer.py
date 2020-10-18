@@ -1,112 +1,38 @@
-import argparse
 import collections
 import functools
 import json
-import os
-import pathlib
-import sys
 import time
-import math
-
-import matplotlib.pyplot as plt
-import tensorflow as tf
-from agents import gap_follower
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['MUJOCO_GL'] = 'egl'
+from dataclasses import dataclass
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.mixed_precision import experimental as prec
-
-tf.get_logger().setLevel('ERROR')
-
+from tensorflow.keras.mixed_precision import experimental as precision
 from tensorflow_probability import distributions as tfd
 
-sys.path.append(str(pathlib.Path(__file__).parent))
+from dreamer import tools
+from dreamer import models
+from dreamer.tools import load_dataset
 
-import models
-import tools
-import wrappers
-from datetime import datetime
-
-#tf.config.run_functions_eagerly(run_eagerly=True)
-
-def define_config():
-  config = tools.AttrDict()
-  # General.
-  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
-  config.seed = 0
-  config.steps = 5e6
-  config.eval_every = 1e4
-  config.log_every = 1e3
-  config.log_scalars = True
-  config.log_images = False
-  config.gpu_growth = True
-  config.precision = 32
-  config.obs_type = 'lidar'
-  # Environment.
-  config.task = 'racecar_MultiAgentAustria'
-  config.envs = 1
-  config.parallel = 'none'
-  config.action_repeat = 4
-  config.time_limit = 3000
-  config.prefill = 5000
-  config.eval_noise = 0.0
-  config.clip_rewards = 'none'
-  # Model.
-  config.encoded_obs_dim = 16
-  config.deter_size = 200
-  config.stoch_size = 30
-  config.num_units = 400
-  config.dense_act = 'elu'
-  config.cnn_act = 'relu'
-  config.cnn_depth = 32
-  config.pcont = False
-  config.free_nats = 3.0
-  config.kl_scale = 1.0
-  config.pcont_scale = 10.0
-  config.weight_decay = 0.0
-  config.weight_decay_pattern = r'.*'
-  # Pretrained model
-  config.use_pretrained_encoder = False
-  config.check_load_pretrained_encoder = tools.Once() if config.use_pretrained_encoder else lambda : False
-  config.pretrained_encoder_path = "racing_dreamer/pretrained_models/pretrained_encoder"
-  # Training.
-  config.batch_size = 64
-  config.batch_length = 50
-  config.train_every = 1000
-  config.train_steps = 100
-  config.pretrain = 100
-  config.model_lr = 6e-4
-  config.value_lr = 8e-5
-  config.actor_lr = 8e-5
-  config.grad_clip = 100.0
-  config.dataset_balance = False
-  # Behavior.
-  config.discount = 0.99
-  config.disclam = 0.95
-  config.horizon = 15
-  config.action_dist = 'tanh_normal'
-  config.action_init_std = 5.0
-  config.expl = 'additive_gaussian'
-  config.expl_amount = 0.3
-  config.expl_decay = 0.0
-  config.expl_min = 0.0
-  return config
 
 
 class Dreamer(tools.Module):
 
+
+  @dataclass
+  class Config:
+    pass
+
+
   def __init__(self, config, datadir, actspace, obspace, writer):
     self._c = config
+
     self._actspace = actspace
     self._obspace = obspace
     self._actdim = actspace.n if hasattr(actspace, 'n') else actspace.shape[0]
     self._writer = writer
     self._random = np.random.RandomState(config.seed)
     with tf.device('cpu:0'):
-      self._step = tf.Variable(count_steps(datadir, config), dtype=tf.int64)
+      self._step = tf.Variable(tools.count_steps(datadir, config), dtype=tf.int64)
     self._should_pretrain = tools.Once()
     self._should_train = tools.Every(config.train_every)
     self._should_log = tools.Every(config.log_every)
@@ -114,12 +40,23 @@ class Dreamer(tools.Module):
     self._last_time = time.time()
     self._metrics = collections.defaultdict(tf.metrics.Mean)
     self._metrics['expl_amount']  # Create variable for checkpoint.
-    self._float = prec.global_policy().compute_dtype
+    self._float = precision.global_policy().compute_dtype
     self._strategy = tf.distribute.MirroredStrategy()
     with self._strategy.scope():
       self._dataset = iter(self._strategy.experimental_distribute_dataset(
-          load_dataset(datadir, self._c)))
+          load_dataset(datadir, self._c, self._preprocess)))
       self._build_model()
+
+  def _preprocess(self, obs):
+    dtype = precision.global_policy().compute_dtype
+    obs = obs.copy()
+    with tf.device('cpu:0'):
+      obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
+      obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
+      clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[self._c.clip_rewards]
+      obs['reward'] = clip_rewards(obs['reward'])
+    return obs
+
 
   def __call__(self, obs, reset, state=None, training=True):
     step = self._step.numpy().item()
@@ -151,7 +88,7 @@ class Dreamer(tools.Module):
     else:
       latent, action = state
     if self._c.obs_type == 'image':
-      embed = self._encode(preprocess(obs, self._c))
+      embed = self._encode(self._preprocess(obs))
     else:
       embed = self._encode(obs)
     latent, _ = self._dynamics.obs_step(latent, action, embed)
@@ -370,155 +307,3 @@ class Dreamer(tools.Module):
     print(f'[{step}]', ' / '.join(f'{k} {v:.1f}' for k, v in metrics))
     self._writer.flush()
 
-
-def preprocess(obs, config):
-  dtype = prec.global_policy().compute_dtype
-  obs = obs.copy()
-  with tf.device('cpu:0'):
-    obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
-    obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
-    clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
-    obs['reward'] = clip_rewards(obs['reward'])
-  return obs
-
-
-def count_steps(datadir, config):
-  return tools.count_episodes(datadir)[1] * config.action_repeat
-
-
-def load_dataset(directory, config):
-  episode = next(tools.load_episodes(directory, 1))
-  types = {k: v.dtype for k, v in episode.items()}
-  shapes = {k: (None,) + v.shape[1:] for k, v in episode.items()}
-  generator = lambda: tools.load_episodes(
-      directory, config.train_steps, config.batch_length,
-      config.dataset_balance)
-  dataset = tf.data.Dataset.from_generator(generator, types, shapes)
-  dataset = dataset.batch(config.batch_size, drop_remainder=True)
-  dataset = dataset.map(functools.partial(preprocess, config=config))
-  dataset = dataset.prefetch(10)
-  return dataset
-
-
-def summarize_episode(episode, config, datadir, writer, prefix):
-  episodes, steps = tools.count_episodes(datadir)
-  length = (len(episode['reward']) - 1) * config.action_repeat
-  ret = episode['reward'].sum()
-  print(f'{prefix.title()} episode of length {length} with return {ret:.1f}.')
-  metrics = [
-      (f'{prefix}/return', float(episode['reward'].sum())),
-      (f'{prefix}/length', len(episode['reward']) - 1),
-      (f'episodes', episodes)]
-  step = count_steps(datadir, config)
-  with (config.logdir / 'metrics.jsonl').open('a') as f:
-    f.write(json.dumps(dict([('step', step)] + metrics)) + '\n')
-  with writer.as_default():  # Env might run in a different thread.
-    tf.summary.experimental.set_step(step)
-    [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
-    if prefix == 'test' and config.obs_type == 'image':
-      tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
-
-
-def make_env(config, writer, prefix, datadir, store, gui=False):
-  suite, task = config.task.split('_', 1)
-  if suite == 'dmc':
-    env = wrappers.DeepMindControl(task)
-    env = wrappers.ActionRepeat(env, config.action_repeat)
-    env = wrappers.NormalizeActions(env)
-  elif suite == 'atari':
-    env = wrappers.Atari(
-        task, config.action_repeat, (64, 64), grayscale=False,
-        life_done=True, sticky_actions=True)
-    env = wrappers.OneHotAction(env)
-  elif suite == 'racecar':
-    if gui:
-      env = wrappers.SingleRaceCarWrapper(id='A', name=task + '_Gui-v0')
-    else:
-      env = wrappers.SingleRaceCarWrapper(id='A', name=task + '-v0')
-
-    env = wrappers.ActionRepeat(env, config.action_repeat)
-    env = wrappers.NormalizeActions(env)
-  else:
-    raise NotImplementedError(suite)
-  env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
-  callbacks = []
-  if store:
-    callbacks.append(lambda ep: tools.save_episodes(datadir, [ep]))
-  callbacks.append(
-      lambda ep: summarize_episode(ep, config, datadir, writer, prefix))
-  env = wrappers.Collect(env, callbacks, config.precision)
-  env = wrappers.RewardObs(env)
-  return env
-
-
-def main(config):
-  if config.gpu_growth:
-    for gpu in tf.config.experimental.list_physical_devices('GPU'):
-      tf.config.experimental.set_memory_growth(gpu, True)
-  assert config.precision in (16, 32), config.precision
-  if config.precision == 16:
-    prec.set_policy(prec.Policy('mixed_float16'))
-  config.steps = int(config.steps)
-  config.logdir.mkdir(parents=True, exist_ok=True)
-  print('Logdir', config.logdir)
-
-  # Create environments.
-  datadir = config.logdir / 'episodes'
-  writer = tf.summary.create_file_writer(
-      str(config.logdir), max_queue=1000, flush_millis=20000)
-  writer.set_as_default()
-  train_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'train', datadir, store=True, gui=True), config.parallel)
-      for _ in range(config.envs)]
-  test_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'test', datadir, store=False, gui=False), config.parallel)
-      for _ in range(config.envs)]
-  actspace = train_envs[0].action_space
-  obspace = train_envs[0].observation_space
-
-  # Prefill dataset with random episodes.
-  step = count_steps(datadir, config)
-  prefill = max(0, config.prefill - step)
-  print(f'Prefill dataset with {prefill} steps.')
-  gapfollower = gap_follower.GapFollower()
-
-  random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
-  tools.simulate(gapfollower, train_envs, prefill / config.action_repeat)
-  writer.flush()
-
-  # Train and regularly evaluate the agent.
-  step = count_steps(datadir, config)
-  print(f'Simulating agent for {config.steps-step} steps.')
-  agent = Dreamer(config, datadir, actspace, obspace, writer)
-  if (config.logdir / 'variables.pkl').exists():
-    print('Load checkpoint.')
-    agent.load(config.logdir / 'variables.pkl')
-  state = None
-
-  state = tools.simulate(agent, train_envs, 10000, state=state, training=False)
-
-
-  while step < config.steps:
-    print('Start evaluation.')
-    tools.simulate(
-        functools.partial(agent, training=False), test_envs, episodes=1)
-    writer.flush()
-    print('Start collection.')
-    steps = config.eval_every // config.action_repeat
-    state = tools.simulate(agent, train_envs, steps, state=state)
-    step = count_steps(datadir, config)
-    agent.save(config.logdir / 'variables.pkl')
-  for env in train_envs + test_envs:
-    env.close()
-
-
-if __name__ == '__main__':
-  try:
-    import colored_traceback
-    colored_traceback.add_hook()
-  except ImportError:
-    pass
-  parser = argparse.ArgumentParser()
-  for key, value in define_config().items():
-    parser.add_argument(f'--{key}', type=tools.args_type(value), default=value)
-  main(parser.parse_args())

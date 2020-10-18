@@ -15,7 +15,7 @@ class SingleRaceCarWrapper:
   def __init__(self, name, id, size=(100,)):
     import racecar_gym
     if name not in envs.keys():
-      scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria.yml', rendering=False)
+      scenario = racecar_gym.MultiAgentScenario.from_spec('scenario/austria.yml', rendering=False)
       envs[name] = racecar_gym.MultiAgentRaceCarEnv(scenario=scenario)
     self.env = envs[name]
     self._agent_ids = list(self.env.observation_space.spaces.keys())
