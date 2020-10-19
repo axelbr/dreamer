@@ -6,8 +6,7 @@ import pathlib
 import pickle
 import re
 import uuid
-from collections import Callable
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 
 import matplotlib.pyplot as plt
 import gym
@@ -57,7 +56,7 @@ def collect_data(agent: Callable[[Dict], Any], env: gym.Env, dataset: Dataset, s
             obs, reward, done, info = env.step(action)
             transition = Transition(
                 observation=obs,
-                action=action,
+                action={'action':action},
                 reward=reward,
                 done=done
             )

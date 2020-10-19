@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import tensorflow as tf
 from tensorflow.python.keras.layers import Conv1D, Flatten, Dense, Conv1DTranspose, Reshape, Conv2D, Conv2DTranspose
+from tensorflow_probability.python.layers import IndependentNormal
 
 from dreamer import tools
 from tensorflow_probability import distributions as tfd
@@ -62,14 +63,14 @@ class ConvLidarEncoder(tf.keras.layers.Layer):
     self.dense_layer = Dense(units=embedding_size)
 
   def call(self, obs, **kwargs) -> tf.Tensor:
+    if len(obs.shape) == 2:
+      obs = tf.expand_dims(obs, axis=1)
     x = obs
     for layer in self.conv_layers:
       x = layer(x)
     x = self.flatten_layer(x)
     x = self.dense_layer(x)
     return x
-
-
 
 class ConvLidarDecoder(tf.keras.layers.Layer):
 
@@ -84,12 +85,16 @@ class ConvLidarDecoder(tf.keras.layers.Layer):
     self.flatten_layer = Flatten()
     self.dense_layer = Dense(units=int(output_size / 4) * 64)
     self.reshape = Reshape(target_shape=(int(output_size / 4), 64))
+    self.dist_params_layer = Dense(units=IndependentNormal.params_size(event_shape=(output_size,)))
+    self.dist = IndependentNormal(event_shape=(output_size,), convert_to_tensor_fn=tfd.Distribution.sample)
 
   def call(self, obs, **kwargs) -> tf.Tensor:
     x = self.dense_layer(obs)
     x = self.reshape(x)
     for layer in self.deconv_layers:
       x = layer(x)
-    x = tf.expand_dims(x, axis=1)
-    return x
+    x = tf.squeeze(x, axis=-1)
+    x = self.dist_params_layer(x)
+    dist = self.dist(x)
+    return dist
 

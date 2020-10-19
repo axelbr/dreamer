@@ -36,7 +36,7 @@ class SingleRaceCarWrapper:
       np.append(action_space[self._id]['motor'].high, action_space[self._id]['steering'].high)
     )
 
-  def step(self, action):
+  def step(self, action: np.ndarray):
     actions = dict([(a, {'motor': (0, 0), 'steering': 0}) for a in self._agent_ids])
     actions[self._id] = {'motor': (action[0], action[1]), 'steering': action[2]}
     obs, reward, done, info = self.env.step(actions)

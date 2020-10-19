@@ -29,14 +29,39 @@ class RSSM(tools.Module):
   def observe(self, embed, action, state=None):
     if state is None:
       state = self.initial(tf.shape(action)[0])
+
+    # This swaps time and batch dimension
     embed = tf.transpose(embed, [1, 0, 2])
     action = tf.transpose(action, [1, 0, 2])
-    post, prior = tools.static_scan(
-        lambda prev, inputs: self.obs_step(prev[0], *inputs),
-        (action, embed), (state, state))
-    post = {k: tf.transpose(v, [1, 0, 2]) for k, v in post.items()}
-    prior = {k: tf.transpose(v, [1, 0, 2]) for k, v in prior.items()}
-    return post, prior
+
+    step = action.shape[0]
+    prev_state = state
+    prev_action = action[0]
+    posteriors, priors = {}, {}
+    for i in range(1, step):
+      posterior, prior = self.obs_step(prev_state=prev_state, prev_action=prev_action, embed=embed[i])
+      prev_state = posterior
+      prev_action = action[i]
+
+      for k in state:
+        if k in posteriors:
+          expanded_posterior = tf.expand_dims(posterior[k], axis=1)
+          expanded_prior = tf.expand_dims(prior[k], axis=1)
+          posteriors[k] = tf.concat((posteriors[k], expanded_posterior), axis=1)
+          priors[k] = tf.concat((priors[k], expanded_prior), axis=1)
+        else:
+          posteriors[k] = tf.expand_dims(posterior[k], axis=1)
+          priors[k] = tf.expand_dims(prior[k], axis=1)
+
+    #post, prior = tools.static_scan(lambda prev, inputs: self.obs_step(prev[0], *inputs),
+    #  (action, embed),
+    #  (state, state)
+    #)
+    # post = {k: tf.transpose(v, [1, 0, 2]) for k, v in posteriors.items()}
+    #prior = {k: tf.transpose(v, [1, 0, 2]) for k, v in priors.items()}
+
+
+    return posteriors, priors
 
   @tf.function
   def imagine(self, action, state=None):
@@ -48,7 +73,7 @@ class RSSM(tools.Module):
     prior = {k: tf.transpose(v, [1, 0, 2]) for k, v in prior.items()}
     return prior
 
-  def get_feat(self, state):
+  def get_state(self, state):
     return tf.concat([state['stoch'], state['deter']], -1)
 
   def get_dist(self, state):

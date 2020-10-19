@@ -92,7 +92,7 @@ class Dreamer(tools.Module):
     else:
       embed = self._encode(obs)
     latent, _ = self._dynamics.obs_step(latent, action, embed)
-    feat = self._dynamics.get_feat(latent)
+    feat = self._dynamics.get_state(latent)
     if training:
       action = self._actor(feat).sample()
     else:
@@ -116,7 +116,7 @@ class Dreamer(tools.Module):
         self._encode.load(self._c.pretrained_encoder_path)
         embed = self._encode(data)
       post, prior = self._dynamics.observe(embed, data['action'])
-      feat = self._dynamics.get_feat(post)
+      feat = self._dynamics.get_state(post)
       image_pred = self._decode(feat)
       reward_pred = self._reward(feat)
       likes = tools.AttrDict()
@@ -240,11 +240,11 @@ class Dreamer(tools.Module):
     flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
     start = {k: flatten(v) for k, v in post.items()}
     policy = lambda state: self._actor(
-        tf.stop_gradient(self._dynamics.get_feat(state))).sample()
+        tf.stop_gradient(self._dynamics.get_state(state))).sample()
     states = tools.static_scan(
         lambda prev, _: self._dynamics.img_step(prev, policy(prev)),
         tf.range(self._c.horizon), start)
-    imag_feat = self._dynamics.get_feat(states)
+    imag_feat = self._dynamics.get_state(states)
     return imag_feat
 
   def _scalar_summaries(
@@ -271,7 +271,7 @@ class Dreamer(tools.Module):
       init, _ = self._dynamics.observe(embed[:6, :5], data['action'][:6, :5])
       init = {k: v[:, -1] for k, v in init.items()}
       prior = self._dynamics.imagine(data['action'][:6, 5:], init)
-      openl = self._decode(self._dynamics.get_feat(prior)).mode()
+      openl = self._decode(self._dynamics.get_state(prior)).mode()
       model = tf.concat([recon[:, :5] + 0.5, openl + 0.5], 1)
       error = (model - truth + 1) / 2
       openl = tf.concat([truth, model, error], 2)
@@ -283,7 +283,7 @@ class Dreamer(tools.Module):
       init, _ = self._dynamics.observe(embed[:6, :5], data['action'][:6, :5])
       init = {k: v[:, -1] for k, v in init.items()}
       prior = self._dynamics.imagine(data['action'][:6, 5:], init)
-      openl = self._decode(self._dynamics.get_feat(prior)).mode()
+      openl = self._decode(self._dynamics.get_state(prior)).mode()
       model = tf.concat([recon[:, :5] + 0.5, openl + 0.5], 1)
       truth_img = tools.lidar_to_image(truth)
       model_img = tools.lidar_to_image(model)
