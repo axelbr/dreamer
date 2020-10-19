@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Iterable
 
 import gym
 import tensorflow as tf
@@ -7,14 +7,21 @@ from tensorflow.python.keras.optimizer_v2.adam import Adam
 from tensorflow_probability import distributions as tfd
 from dreamer.models import RSSM, ConvLidarEncoder, ConvLidarDecoder, DenseDecoder
 from dreamer.models.actor_critic import ActorCritic, ActionDecoder
-from rlephant import Dataset
+from rlephant import Dataset, Transition, Episode
+
+from dreamer import tools
 
 class Dreamer(tf.Module):
     @dataclass
     class Config:
-        B: int = 50
-        L: int = 15
+        T: int = 300
+        C: int = 3
+        B: int = 30
+        L: int = 20
         beta: float = 1.0
+        H: int = 10
+        discount_gamma: float = 0.99
+        discount_lambda: float = 0.95
 
     def __init__(self, config: Config, env: gym.Env):
         self._config = config
@@ -23,24 +30,62 @@ class Dreamer(tf.Module):
         self._decoder = ConvLidarDecoder(output_size=1080)
         self._reward = DenseDecoder(shape=(), layers=2, units=400, act='elu', dist='normal')
 
-        self._action = ActionDecoder(size=env.action_space.shape[0],
+        self._actor = ActionDecoder(size=env.action_space.shape[0],
                                      layers=4,
                                      units=400,
                                      dist='tanh_normal',
                                      init_std=5.0,
                                      act='elu')
-        self._value = DenseDecoder(shape=3, layers=3, units=400, act='elu')
+        self._value = DenseDecoder(shape=(), layers=3, units=400, act='elu')
 
         self._dynamics_optimizer = Adam()
+        self._actor_optimizer = Adam()
+        self._value_optimizer = Adam()
+
+        self._act_dim = env.action_space.shape
+        self._info = dict(dynamics={}, critic={}, actor={}, logs={})
 
         modules = [self._encoder, self._dynamics, self._decoder, self._reward]
         self._dynamics_variables = tf.nest.flatten([module.trainable_variables for module in modules])
+        self._pcont = False
 
+    def __call__(self, obs, state=None, training=False):
+        obs = obs['lidar']
+        if len(obs.shape) == 1:
+            obs = tf.expand_dims(obs, axis=0)
+            batch_size = 1
+        else:
+            batch_size = obs.shape[0]
 
+        if state is None:
+            latent = self._dynamics.initial(batch_size=batch_size)
+            action = tf.zeros((batch_size, *self._act_dim), tf.float32)
+        else:
+            latent, action = state
 
+        embed = self._encoder(obs)
+        posterior, _ = self._dynamics.obs_step(prev_state=latent, prev_action=action, embed=embed)
+        state = self._dynamics.get_state(posterior)
+        action_distribution = self._actor(state)
 
-    def __call__(self, obs, state=None):
-        pass
+        if training:
+            action = action_distribution.sample()
+        else:
+            action = action_distribution.mode()
+
+        #action = self._exploration(action, training)
+        state = (latent, action)
+        return action, state
+
+    def train(self, steps: int, env: gym.Env, dataset: Dataset) -> Iterable[Dict]:
+        for step in range(steps):
+            self._info['logs']['step'] = step
+            for c in range(self._config.C):
+                posteriors = self.learn_dynamics(dataset=dataset)
+                self.learn_behaviour(starting_state_posteriors=posteriors)
+
+            self.interact_with_env(env=env, dataset=dataset)
+            yield self._info
 
     def learn_dynamics(self, dataset: Dataset):
 
@@ -70,24 +115,11 @@ class Dreamer(tf.Module):
                 observation=observation_batch,
                 rewards=reward_batch
             )
-
-
         gradients = model_tape.gradient(loss, self._dynamics_variables)
         self._dynamics_optimizer.apply_gradients(zip(gradients, self._dynamics_variables))
 
+        return posterior_states
 
-
-
-            #
-            # observation_loss = tf.reduce_mean(image_pred.log_prob(observation_batch))
-            # reward_loss = tf.reduce_mean(reward_pred.log_prob(reward_batch))
-            #
-            # prior_dist = self._dynamics.get_dist(prior)
-            # post_dist = self._dynamics.get_dist(post)
-            # div = tf.reduce_mean(tfd.kl_divergence(post_dist, prior_dist))
-            # div = tf.maximum(div, self._c.free_nats)
-            # model_loss = self._c.kl_scale * div - sum(likes.values())
-            # model_loss /= float(self._strategy.num_replicas_in_sync)
 
     def _encode_observations(self, observations: tf.Tensor) -> tf.Tensor:
         batched_obs = tf.reshape(observations, shape=(-1, *observations.shape[2:]))
@@ -125,8 +157,81 @@ class Dreamer(tf.Module):
         distribution = tfd.BatchReshape(distribution, batch_shape=(batch_size, sequence_length))
         return distribution
 
-    def learn_behaviour(self):
-        pass
+    def learn_behaviour(self, starting_state_posteriors: Dict):
 
-    def interact_with_env(self, env: gym.Env):
-        pass
+        with tf.GradientTape() as actor_tape:
+            imagined_states = self._imagine_horizon(posteriors=starting_state_posteriors, horizon=self._config.H)
+
+            reward = self._reward(imagined_states).mode()
+            if self._pcont:
+                pcont = self._pcont(imagined_states).mean()
+            else:
+                pcont = self._config.discount_gamma * tf.ones_like(reward)
+
+            values = self._value(imagined_states).mode()
+            returns = tools.lambda_return(
+                reward=reward[:-1],
+                value=values[:-1],
+                pcont=pcont[:-1],
+                bootstrap=values[-1],
+                lambda_=self._config.discount_lambda, axis=0
+            )
+            discount = tf.stop_gradient(tf.math.cumprod(tf.concat([tf.ones_like(pcont[:1]), pcont[:-2]], 0), 0))
+            actor_loss = -tf.reduce_mean(discount * returns)
+
+        with tf.GradientTape() as value_tape:
+            value_pred = self._value(imagined_states)[:-1]
+            target = tf.stop_gradient(returns)
+            value_loss = -tf.reduce_mean(discount * value_pred.log_prob(target))
+
+        gradients = actor_tape.gradient(actor_loss, self._actor.variables)
+        self._actor_optimizer.apply_gradients(zip(gradients, self._actor.variables))
+
+        gradients = value_tape.gradient(value_loss, self._value.variables)
+        self._value_optimizer.apply_gradients(zip(gradients, self._value.variables))
+
+
+    def _imagine_horizon(self, posteriors: Dict, horizon: int) -> tf.Tensor:
+        if self._pcont:  # Last step could be terminal.
+            posteriors = {k: v[:, :-1] for k, v in posteriors.items()}
+        flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
+        policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_state(state))).sample()
+        start = {k: flatten(v) for k, v in posteriors.items()}
+        trajectories = {}
+        for k, v in start.items():
+            trajectories[k] = tf.expand_dims(v, axis=1)
+        previous = start
+        for step in range(horizon):
+            actions = policy(previous)
+            prior = self._dynamics.img_step(prev_state=previous, prev_action=actions)
+
+            for k in trajectories:
+                data = tf.expand_dims(prior[k], axis=1)
+                trajectories[k] = tf.concat((trajectories[k], data), axis=1)
+
+            previous = prior
+
+        states = self._dynamics.get_state(trajectories)
+        return states
+
+    def interact_with_env(self, env: gym.Env, dataset: Dataset):
+        t = 0
+        while t < self._config.T:
+            done = False
+            obs = env.reset()
+            episode = Episode()
+            state = None
+            while not done:
+                action, state = self.__call__(obs=obs, state=state, training=True)
+                obs, reward, done, info = env.step(action[0])
+                transition = Transition(
+                    observation=obs,
+                    action={'action': action[0]},
+                    reward=reward,
+                    done=done
+                )
+                episode.append(transition)
+                t += 1
+
+                done = done or t >= self._config.T
+            dataset.save(episode)

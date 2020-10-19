@@ -36,18 +36,8 @@ def train_dreamer(agent, config, test_envs, train_envs, dataset, writer):
   step = tools.count_steps(datadir, config)
   print(f'Simulating agent for {config.steps-step} steps.')
 
-  while step < config.steps:
-    agent.learn_dynamics(dataset=dataset)
-    print('Start evaluation.')
-    # tools.simulate(
-    #   functools.partial(agent, training=False), test_envs, episodes=1)
-    # writer.flush()
-    # print('Start collection.')
-    # steps = config.eval_every // config.action_repeat
-    # state = tools.simulate(agent, train_envs, steps, state=state)
-    # step = tools.count_steps(datadir, config)
-    # agent.save(config.logdir / 'variables.pkl')
-
+  for logs in agent.train(steps=config.steps, dataset=dataset, env=train_envs[0]):
+    print(logs)
 
 def initialize_dataset(config, train_envs, writer):
   datadir = config.logdir / 'episodes.h5'

@@ -444,8 +444,7 @@ class TanhBijector(tfp.bijectors.Bijector):
         return 2.0 * (log2 - x - tf.nn.softplus(-2.0 * x))
 
 
-def lambda_return(
-reward, value, pcont, bootstrap, lambda_, axis):
+def lambda_return(reward, value, pcont, bootstrap, lambda_, axis):
     # Setting lambda=1 gives a discounted Monte Carlo return.
     # Setting lambda=0 gives a fixed 1-step return.
     assert reward.shape.ndims == value.shape.ndims, (reward.shape, value.shape)
