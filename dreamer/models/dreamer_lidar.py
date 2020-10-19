@@ -14,12 +14,12 @@ from dreamer import tools
 class Dreamer(tf.Module):
     @dataclass
     class Config:
-        T: int = 300
-        C: int = 3
-        B: int = 30
-        L: int = 20
+        T: int = 1000
+        C: int = 100
+        B: int = 50
+        L: int = 50
         beta: float = 1.0
-        H: int = 10
+        H: int = 15
         discount_gamma: float = 0.99
         discount_lambda: float = 0.95
 
@@ -43,11 +43,19 @@ class Dreamer(tf.Module):
         self._value_optimizer = Adam()
 
         self._act_dim = env.action_space.shape
-        self._info = dict(dynamics={}, critic={}, actor={}, logs={})
-
+        self._info = self._reset_info()
         modules = [self._encoder, self._dynamics, self._decoder, self._reward]
         self._dynamics_variables = tf.nest.flatten([module.trainable_variables for module in modules])
         self._pcont = False
+
+    def _reset_info(self):
+        return {
+            'step': 1,
+            'dynamics_losses': [],
+            'value_losses': [],
+            'actor_losses': [],
+            'avg_return': 0.0,
+        }
 
     def __call__(self, obs, state=None, training=False):
         obs = obs['lidar']
@@ -79,7 +87,9 @@ class Dreamer(tf.Module):
 
     def train(self, steps: int, env: gym.Env, dataset: Dataset) -> Iterable[Dict]:
         for step in range(steps):
-            self._info['logs']['step'] = step
+            self._info = self._reset_info()
+            self._info['step'] = step
+
             for c in range(self._config.C):
                 posteriors = self.learn_dynamics(dataset=dataset)
                 self.learn_behaviour(starting_state_posteriors=posteriors)
@@ -115,6 +125,7 @@ class Dreamer(tf.Module):
                 observation=observation_batch,
                 rewards=reward_batch
             )
+        self._info['dynamics_losses'].append(loss)
         gradients = model_tape.gradient(loss, self._dynamics_variables)
         self._dynamics_optimizer.apply_gradients(zip(gradients, self._dynamics_variables))
 
@@ -190,6 +201,9 @@ class Dreamer(tf.Module):
         gradients = value_tape.gradient(value_loss, self._value.variables)
         self._value_optimizer.apply_gradients(zip(gradients, self._value.variables))
 
+        self._info['actor_losses'].append(actor_loss)
+        self._info['value_losses'].append(value_loss)
+
 
     def _imagine_horizon(self, posteriors: Dict, horizon: int) -> tf.Tensor:
         if self._pcont:  # Last step could be terminal.
@@ -216,6 +230,8 @@ class Dreamer(tf.Module):
 
     def interact_with_env(self, env: gym.Env, dataset: Dataset):
         t = 0
+        episodes = 0
+        total_return = 0.0
         while t < self._config.T:
             done = False
             obs = env.reset()
@@ -234,4 +250,8 @@ class Dreamer(tf.Module):
                 t += 1
 
                 done = done or t >= self._config.T
+                total_return += reward
+            print(f'Finished episode of length {len(episode)} with reward {sum(episode.rewards)}')
+            episodes += 1
             dataset.save(episode)
+        self._info['avg_return']: total_return / episodes
