@@ -41,7 +41,7 @@ def define_config():
   config.eval_every = 1e4
   config.log_every = 1e3
   config.log_scalars = True
-  config.log_images = False
+  config.log_images = True
   config.gpu_growth = True
   config.precision = 32
   config.obs_type = 'lidar'
@@ -62,7 +62,7 @@ def define_config():
   config.dense_act = 'elu'
   config.cnn_act = 'relu'
   config.cnn_depth = 32
-  config.pcont = False
+  config.pcont = True
   config.free_nats = 3.0
   config.kl_scale = 1.0
   config.pcont_scale = 10.0
@@ -133,7 +133,7 @@ class Dreamer(tools.Module):
       print(f'Training for {n} steps.')
       with self._strategy.scope():
         for train_step in range(n):
-          print(train_step)
+          print(f'[Train Step] # {train_step}')
           log_images = self._c.log_images and log and train_step == 0
           self.train(next(self._dataset), log_images)
       if log:
@@ -245,7 +245,7 @@ class Dreamer(tools.Module):
     elif self._c.obs_type == 'lidar':
       #self._encode = pretrained_models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
       self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
-      self._decode = models.MLPLidarDecoder(output_dim=self._obspace['lidar'].shape)
+      self._decode = models.MLPLidarDecoder(self._obspace['lidar'].shape)
       #self._decode = pretrained_models.MLPLidarDecoder(self._c.encoded_obs_dim, cnn_act)
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
@@ -328,31 +328,33 @@ class Dreamer(tools.Module):
     self._metrics['action_ent'].update_state(self._actor(feat).entropy())
 
   def _image_summaries(self, data, embed, image_pred):
+    summary_size = 6    # nr images to be shown
+    summary_length = 5  # nr step (length) of each gif
     if self._c.obs_type == 'image':
-      truth = data['image'][:6] + 0.5
-      recon = image_pred.mode()[:6]
-      init, _ = self._dynamics.observe(embed[:6, :5], data['action'][:6, :5])
+      truth = data['image'][:summary_size] + 0.5
+      recon = image_pred.mode()[:summary_size]
+      init, _ = self._dynamics.observe(embed[:summary_size, :summary_length], data['action'][:summary_size, :summary_length])
       init = {k: v[:, -1] for k, v in init.items()}
-      prior = self._dynamics.imagine(data['action'][:6, 5:], init)
+      prior = self._dynamics.imagine(data['action'][:summary_size, summary_length:], init)
       openl = self._decode(self._dynamics.get_feat(prior)).mode()
-      model = tf.concat([recon[:, :5] + 0.5, openl + 0.5], 1)
+      model = tf.concat([recon[:, :summary_length] + 0.5, openl + 0.5], 1)
       error = (model - truth + 1) / 2
       openl = tf.concat([truth, model, error], 2)
       tools.graph_summary(
           self._writer, tools.video_summary, 'agent/openl', openl)
     elif self._c.obs_type == 'lidar':
-      truth = data['lidar'][:6] + 0.5
-      recon = image_pred.mode()[:6]
-      init, _ = self._dynamics.observe(embed[:6, :5], data['action'][:6, :5])
+      truth = data['lidar'][:summary_size] + 0.5
+      recon = image_pred.mode()[:summary_size]
+      init, _ = self._dynamics.observe(embed[:summary_size, :summary_length], data['action'][:summary_size, :summary_length])
       init = {k: v[:, -1] for k, v in init.items()}
-      prior = self._dynamics.imagine(data['action'][:6, 5:], init)
+      prior = self._dynamics.imagine(data['action'][:summary_size, summary_length:], init)
       openl = self._decode(self._dynamics.get_feat(prior)).mode()
-      model = tf.concat([recon[:, :5] + 0.5, openl + 0.5], 1)
+      model = tf.concat([recon[:, :summary_length] + 0.5, openl + 0.5], 1)
       truth_img = tools.lidar_to_image(truth)
       model_img = tools.lidar_to_image(model)
       error = model_img - truth_img
       openl = tf.concat([truth_img, model_img, error], 2)
-      tools.graph_summary(self._writer, tools.video_summary, 'agent/openl', openl)
+      tools.graph_summary(self._writer, tools.video_summary, 'agent/openl', openl, self._step)
       #  self._writer, tools.video_summary, 'agent/openl', video)
 
   def _write_summaries(self):
@@ -483,7 +485,7 @@ def main(config):
   gapfollower = gap_follower.GapFollower()
 
   random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
-  tools.simulate(gapfollower, train_envs, prefill / config.action_repeat)
+  tools.simulate(random_agent, train_envs, prefill / config.action_repeat)
   writer.flush()
 
   # Train and regularly evaluate the agent.

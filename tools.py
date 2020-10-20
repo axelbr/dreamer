@@ -13,7 +13,7 @@ import tensorflow.compat.v1 as tf1
 import tensorflow_probability as tfp
 from tensorflow.keras.mixed_precision import experimental as prec
 from tensorflow_probability import distributions as tfd
-
+import tfplot
 
 class AttrDict(dict):
 
@@ -60,30 +60,24 @@ def graph_summary(writer, fn, *args):
       fn(*args)
   return tf.numpy_function(inner, args, [])
 
+@tfplot.autowrap(figsize=(2, 2))
+def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, color='red'):
+    ax.scatter(x, y, color=color)
 
 def lidar_to_image(scan):
   angles = tf.linspace(-math.radians(270.0 / 2), math.radians(270.0 / 2), scan.shape[-1])
   #angles = tf.cast(angles, tf.float16)
-  images = []
-  for i in range(scan.shape[1]):
-    x = scan[0, i, :] * tf.cos(angles)
-    y = scan[0, i, :] * tf.sin(angles)
-    #plt.scatter(x, y)
-
-    fig = plt.figure(figsize=(1.5, 1.5), dpi=150)
-    ax = fig.add_subplot(111)
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_xlim(-8, 8)
-    ax.set_ylim(-8, 8)
-    ax.scatter(x, y, s=1, label="sin")
-    fig.canvas.draw()
-    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-    plt.close(fig)
-    images.append(data)
-  video = tf.stack(images)
-  return video
+  batch_video = []
+  for b in range(scan.shape[0]):
+    single_episode = []
+    for t in range(scan.shape[1]):
+      x = scan[b, t, :] * tf.cos(angles)
+      y = scan[b, t, :] * tf.sin(angles)
+      data = plot_scatter(x, y, color="k")[:, :, :3]    # return RGBA image, then discard "alpha" channel
+      single_episode.append(data)
+    video = tf.stack(single_episode)
+    batch_video.append(video)
+  return tf.stack(batch_video)
 
 import imageio
 from PIL import Image
