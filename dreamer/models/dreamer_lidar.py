@@ -48,6 +48,22 @@ class Dreamer(tf.Module):
         self._dynamics_variables = tf.nest.flatten([module.trainable_variables for module in modules])
         self._pcont = False
 
+    def train(self, steps: int, env: gym.Env, dataset: Dataset) -> Iterable[Dict]:
+        for step in range(steps):
+            print(f'Iteration {step + 1}/{steps}')
+            self._info = self._reset_info()
+            self._info['step'] = step
+            for c in range(self._config.C):
+                print(f'Train step {c + 1}/{self._config.C}.')
+                posteriors = self.learn_dynamics(dataset=dataset)
+                self.learn_behaviour(starting_state_posteriors=posteriors)
+
+            print(f'Collect {self._config.T} transitions with updated models.')
+            self.interact_with_env(env=env, dataset=dataset)
+            print(f'Metrics:')
+            [print(f'{k}: {v}') for k, v in self._info.items()]
+            yield self._info
+
     def _reset_info(self):
         return {
             'step': 1,
@@ -85,17 +101,7 @@ class Dreamer(tf.Module):
         state = (latent, action)
         return action, state
 
-    def train(self, steps: int, env: gym.Env, dataset: Dataset) -> Iterable[Dict]:
-        for step in range(steps):
-            self._info = self._reset_info()
-            self._info['step'] = step
 
-            for c in range(self._config.C):
-                posteriors = self.learn_dynamics(dataset=dataset)
-                self.learn_behaviour(starting_state_posteriors=posteriors)
-
-            self.interact_with_env(env=env, dataset=dataset)
-            yield self._info
 
     def learn_dynamics(self, dataset: Dataset):
 
@@ -125,7 +131,7 @@ class Dreamer(tf.Module):
                 observation=observation_batch,
                 rewards=reward_batch
             )
-        self._info['dynamics_losses'].append(loss)
+        self._info['dynamics_losses'].append(loss.numpy())
         gradients = model_tape.gradient(loss, self._dynamics_variables)
         self._dynamics_optimizer.apply_gradients(zip(gradients, self._dynamics_variables))
 
@@ -201,8 +207,8 @@ class Dreamer(tf.Module):
         gradients = value_tape.gradient(value_loss, self._value.variables)
         self._value_optimizer.apply_gradients(zip(gradients, self._value.variables))
 
-        self._info['actor_losses'].append(actor_loss)
-        self._info['value_losses'].append(value_loss)
+        self._info['actor_losses'].append(actor_loss.numpy())
+        self._info['value_losses'].append(value_loss.numpy())
 
 
     def _imagine_horizon(self, posteriors: Dict, horizon: int) -> tf.Tensor:
