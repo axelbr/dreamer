@@ -29,11 +29,5 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
   else:
     raise NotImplementedError(suite)
   env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
-  callbacks = []
-  if store:
-    callbacks.append(lambda ep: tools.save_episodes(datadir, [ep]))
-  callbacks.append(
-      lambda ep: tools.summarize_episode(ep, config, datadir, writer, prefix))
-  env = wrappers.Collect(env, callbacks, config.precision)
   env = wrappers.RewardObs(env)
   return env
