@@ -54,8 +54,10 @@ class Dreamer(tf.Module):
             self._info = self._reset_info()
             self._info['step'] = step
             for c in range(self._config.C):
-                print(f'Train step {c + 1}/{self._config.C}.')
+                print(f'Train dynamics model: step {c + 1}/{self._config.C}.')
                 posteriors = self.learn_dynamics(dataset=dataset)
+            for c in range(self._config.C):
+                print(f'Train actor-critic: step {c + 1}/{self._config.C}.')
                 self.learn_behaviour(starting_state_posteriors=posteriors)
 
             print(f'Collect {self._config.T} transitions with updated models.')
