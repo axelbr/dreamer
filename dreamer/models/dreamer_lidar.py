@@ -26,7 +26,7 @@ class Dreamer(tf.Module):
     def __init__(self, config: Config, env: gym.Env):
         self._config = config
         self._dynamics = RSSM(stoch=30, deter=200, hidden=200)
-        self._encoder = ConvLidarEncoder(embedding_size=16)
+        self._encoder = ConvLidarEncoder(embedding_size=128)
         self._decoder = ConvLidarDecoder(output_size=1080)
         self._reward = DenseDecoder(shape=(), layers=2, units=400, act='elu', dist='normal')
 
@@ -251,7 +251,7 @@ class Dreamer(tf.Module):
 
                 done = done or t >= self._config.T
                 total_return += reward
-            print(f'Finished episode of length {len(episode)} with reward {sum(episode.rewards)}')
+            print(f'Finished episode of length {len(episode)} with reward {sum(episode.rewards[:])}')
             episodes += 1
             dataset.save(episode)
-        self._info['avg_return']: total_return / episodes
+        self._info['avg_return'] = float(total_return) / float(episodes)
