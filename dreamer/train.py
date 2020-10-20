@@ -11,12 +11,12 @@ from dreamer.baselines import GapFollower
 from rlephant import Dataset
 from tensorflow.keras.mixed_precision import experimental as precision
 
-from dreamer.environments import make_async_env, make_env
+from .environments import make_async_env, make_env
 
 sys.path.append(str(pathlib.Path(__file__).parent))
 
 import dreamer.tools as tools
-from dreamer.models import RacingDreamer
+from dreamer import RacingDreamer
 
 def configure_agent(config, train_envs: List[gym.Env], writer: tf.summary.SummaryWriter) -> RacingDreamer:
   datadir = config.logdir / 'episodes'
