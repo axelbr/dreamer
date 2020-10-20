@@ -38,6 +38,12 @@ def train_dreamer(agent, config, test_envs, train_envs, dataset, writer):
 
   for logs in agent.train(steps=config.steps, dataset=dataset, env=train_envs[0]):
     print(logs)
+    logs['value_losses'] = tf.reduce_mean(logs['value_losses'])
+    logs['actor_losses'] = tf.reduce_mean(logs['actor_losses'])
+    logs['dynamics_losses'] = tf.reduce_mean(logs['dynamics_losses'])
+    for k, v in logs.items():
+      with writer.as_default():
+        tf.summary.scalar(k, v, step=logs['step'])
 
 def initialize_dataset(config, train_envs, writer):
   datadir = config.logdir / 'episodes.h5'
