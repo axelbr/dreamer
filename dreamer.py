@@ -230,9 +230,8 @@ class Dreamer(tools.Module):
             model_loss, value_loss, actor_loss, model_norm, value_norm,
             actor_norm)
       if tf.equal(log_images, True):
-        #note: image summaries doesn t work with lidar observations
-        #self._image_summaries(data, embed, image_pred)
-        pass
+        self._image_summaries(data, embed, image_pred)
+
 
   def _build_model(self):
     acts = dict(
