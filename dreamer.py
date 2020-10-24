@@ -473,9 +473,10 @@ def main(config):
   train_envs = [wrappers.Async(lambda: make_env(
       config, writer, 'train', datadir, store=True, gui=True), config.parallel)
       for _ in range(config.envs)]
-  test_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'test', datadir, store=False, gui=False), config.parallel)
-      for _ in range(config.envs)]
+  #test_envs = [wrappers.Async(lambda: make_env(
+  #    config, writer, 'test', datadir, store=False, gui=False), config.parallel)
+  #    for _ in range(config.envs)]
+
   actspace = train_envs[0].action_space
   obspace = train_envs[0].observation_space
 
@@ -498,21 +499,20 @@ def main(config):
     agent.load(config.logdir / 'variables.pkl')
   state = None
 
-  state = tools.simulate(agent, train_envs, 10000, state=state, training=False)
-
+  #state = tools.simulate(agent, train_envs, 10000, state=state, training=False)
 
   while step < config.steps:
+    # Evaluation step
     print('Start evaluation.')
-    tools.simulate(
-        functools.partial(agent, training=False), test_envs, episodes=1)
-    writer.flush()
+    #tools.simulate(
+    #    functools.partial(agent, training=False), test_envs, episodes=1)
+    #writer.flush()
+    # training step
     print('Start collection.')
     steps = config.eval_every // config.action_repeat
     state = tools.simulate(agent, train_envs, steps, state=state)
     step = count_steps(datadir, config)
     agent.save(config.logdir / 'variables.pkl')
-  for env in train_envs + test_envs:
-    env.close()
 
 
 if __name__ == '__main__':

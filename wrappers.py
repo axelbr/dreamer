@@ -9,14 +9,54 @@ import numpy as np
 from PIL import Image
 
 envs = {}
+import racecar_gym
+
+
+class SingleForkedRaceCarWrapper:
+
+  def __init__(self, name, id):
+    import racecar_gym
+    from racecar_gym.envs.vectorized_multi_agent_race import VectorizedMultiAgentRaceEnv
+    if name not in envs.keys():
+      scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria.yml', rendering=False)
+      envs[name] = VectorizedMultiAgentRaceEnv(scenarios=[scenario])
+    self.env = envs[name]
+    self._agent_ids = list(self.env.observation_space.spaces[0].keys())
+    self._id = id
+
+  @property
+  def observation_space(self):
+    space = self.env.observation_space[0][self._id]
+    return space
+
+  @property
+  def action_space(self):
+    action_space = self.env.action_space[0]
+    return gym.spaces.Box(
+      np.append(action_space[self._id]['motor'].low, action_space[self._id]['steering'].low),
+      np.append(action_space[self._id]['motor'].high, action_space[self._id]['steering'].high)
+    )
+
+  def step(self, action):
+    actions = dict([(a, {'motor': (0, 0), 'steering': 0}) for a in self._agent_ids])
+    actions[self._id] = {'motor': (action[0], action[1]), 'steering': action[2]}
+    obs, reward, done, info = self.env.step(actions)
+    if 'low_res_camera' in obs[self._id]:
+      obs[self._id]['image'] = obs[self._id]['low_res_camera']
+    return obs[self._id], reward[self._id], done[self._id], info[self._id]
+
+  def reset(self):
+    obs = self.env.reset()
+    if 'low_res_camera' in obs[self._id]:
+      obs[self._id]['image'] = obs[self._id]['low_res_camera']
+    return obs[self._id]
 
 class SingleRaceCarWrapper:
 
   def __init__(self, name, id, size=(100,)):
-    import racecar_gym
     if name not in envs.keys():
       scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria.yml', rendering=False)
-      envs[name] = racecar_gym.MultiAgentRaceCarEnv(scenario=scenario)
+      envs[name] = racecar_gym.MultiAgentRaceEnv(scenario=scenario)
     self.env = envs[name]
     self._agent_ids = list(self.env.observation_space.spaces.keys())
     self._size = size
