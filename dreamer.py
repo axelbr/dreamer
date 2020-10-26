@@ -59,6 +59,7 @@ def define_config():
   config.deter_size = 200
   config.stoch_size = 30
   config.num_units = 400
+  config.reward_out_dist = 'normal'
   config.dense_act = 'elu'
   config.cnn_act = 'relu'
   config.cnn_depth = 32
@@ -252,7 +253,7 @@ class Dreamer(tools.Module):
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
 
-    self._reward = models.DenseDecoder((), 2, self._c.num_units, act=act)
+    self._reward = models.DenseDecoder((), 2, self._c.num_units, dist=self._c.reward_out_dist, act=act)
     if self._c.pcont:
       self._pcont = models.DenseDecoder(
           (), 3, self._c.num_units, 'binary', act=act)
