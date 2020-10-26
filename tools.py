@@ -84,7 +84,9 @@ def lidar_to_image(scan):
 
 @tfplot.autowrap(figsize=(2, 2))
 def plot_step(x: np.ndarray, y: np.ndarray, *, ax, color='red'):
+  margin = 0.1
   ax.step(x, y, color=color)
+  ax.set_ylim(0 - margin, 1 + margin)
 
 def reward_to_image(reward_data):
   batch_video = []
