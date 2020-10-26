@@ -435,9 +435,9 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     env = wrappers.OneHotAction(env)
   elif suite == 'racecar':
     if gui:
-      env = wrappers.SingleRaceCarWrapper(id='A', name=task + '_Gui-v0')
+      env = wrappers.SingleForkedRaceCarWrapper(id='A', name=task + '_Gui-v0')
     else:
-      env = wrappers.SingleRaceCarWrapper(id='A', name=task + '-v0')
+      env = wrappers.SingleForkedRaceCarWrapper(id='A', name=task + '-v0')
 
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)

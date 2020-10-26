@@ -11,3 +11,5 @@ MUJOCO_LOG.TXT
 /offline_autoencoder_tuning/out/
 */*h5
 events*v2
+/metrics.jsonl
+/logs/
