@@ -30,7 +30,7 @@ import tools
 import wrappers
 from datetime import datetime
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
@@ -200,7 +200,7 @@ class Dreamer(tools.Module):
 
     with tf.GradientTape() as actor_tape:
       imag_feat = self._imagine_ahead(post)
-      reward = self._reward(imag_feat).mode()
+      reward = tf.cast(self._reward(imag_feat).mode(), 'float')       # cast: to address the output of bernoulli
       if self._c.pcont:
         pcont = self._pcont(imag_feat).mean()
       else:
