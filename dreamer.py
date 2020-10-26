@@ -231,6 +231,7 @@ class Dreamer(tools.Module):
             actor_norm)
       if tf.equal(log_images, True):
         self._image_summaries(data, embed, image_pred)
+        self._reward_summaries(data, reward_pred)
 
 
   def _build_model(self):
@@ -250,7 +251,6 @@ class Dreamer(tools.Module):
       #self._decode = pretrained_models.MLPLidarDecoder(self._c.encoded_obs_dim, cnn_act)
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
-
 
     self._reward = models.DenseDecoder((), 2, self._c.num_units, act=act)
     if self._c.pcont:
@@ -329,24 +329,24 @@ class Dreamer(tools.Module):
     self._metrics['action_ent'].update_state(self._actor(feat).entropy())
 
   def _image_summaries(self, data, embed, image_pred):
-    summary_size = 6    # nr images to be shown
+    summary_size = 6  # nr images to be shown
     summary_length = 5  # nr step (length) of each gif
     if self._c.obs_type == 'image':
       truth = data['image'][:summary_size] + 0.5
       recon = image_pred.mode()[:summary_size]
-      init, _ = self._dynamics.observe(embed[:summary_size, :summary_length], data['action'][:summary_size, :summary_length])
+      init, _ = self._dynamics.observe(embed[:summary_size, :summary_length],
+                                       data['action'][:summary_size, :summary_length])
       init = {k: v[:, -1] for k, v in init.items()}
       prior = self._dynamics.imagine(data['action'][:summary_size, summary_length:], init)
       openl = self._decode(self._dynamics.get_feat(prior)).mode()
       model = tf.concat([recon[:, :summary_length] + 0.5, openl + 0.5], 1)
       error = (model - truth + 1) / 2
       openl = tf.concat([truth, model, error], 2)
-      tools.graph_summary(
-          self._writer, tools.video_summary, 'agent/openl', openl)
     elif self._c.obs_type == 'lidar':
       truth = data['lidar'][:summary_size] + 0.5
       recon = image_pred.mode()[:summary_size]
-      init, _ = self._dynamics.observe(embed[:summary_size, :summary_length], data['action'][:summary_size, :summary_length])
+      init, _ = self._dynamics.observe(embed[:summary_size, :summary_length],
+                                       data['action'][:summary_size, :summary_length])
       init = {k: v[:, -1] for k, v in init.items()}
       prior = self._dynamics.imagine(data['action'][:summary_size, summary_length:], init)
       openl = self._decode(self._dynamics.get_feat(prior)).mode()
@@ -355,8 +355,18 @@ class Dreamer(tools.Module):
       model_img = tools.lidar_to_image(model)
       error = model_img - truth_img
       openl = tf.concat([truth_img, model_img, error], 2)
-      tools.graph_summary(self._writer, tools.video_summary, 'agent/openl', openl, self._step)
-      #  self._writer, tools.video_summary, 'agent/openl', video)
+    tools.graph_summary(self._writer, tools.video_summary,
+                        'agent/train/autoencoder', openl, self._step)
+
+  def _reward_summaries(self, data, reward_pred):
+    summary_size = 6    # nr images to be shown
+    truth = tools.reward_to_image(data['reward'][:summary_size])
+    model = tools.reward_to_image(reward_pred.mode()[:summary_size])
+    error = model - truth
+    video_image = tf.concat([truth, model, error], 1)   # note: no T dimension, then stack over dim 1
+    video_image = tf.expand_dims(video_image, axis=1)   # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
+    tools.graph_summary(self._writer, tools.video_summary,
+                        'agent/train/reward', video_image, self._step)
 
   def _write_summaries(self):
     step = int(self._step.numpy())
@@ -418,8 +428,9 @@ def summarize_episode(episode, config, datadir, writer, prefix):
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
-    if prefix == 'test' and config.obs_type == 'image':
+    if prefix == 'test' and config.obs_type in ['image', 'lidar']:
       tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
+
 
 
 def make_env(config, writer, prefix, datadir, store, gui=False):
@@ -473,9 +484,9 @@ def main(config):
   train_envs = [wrappers.Async(lambda: make_env(
       config, writer, 'train', datadir, store=True, gui=True), config.parallel)
       for _ in range(config.envs)]
-  #test_envs = [wrappers.Async(lambda: make_env(
-  #    config, writer, 'test', datadir, store=False, gui=False), config.parallel)
-  #    for _ in range(config.envs)]
+  test_envs = [wrappers.Async(lambda: make_env(
+      config, writer, 'test', datadir, store=False, gui=False), config.parallel)
+      for _ in range(config.envs)]
 
   actspace = train_envs[0].action_space
   obspace = train_envs[0].observation_space
@@ -504,9 +515,9 @@ def main(config):
   while step < config.steps:
     # Evaluation step
     print('Start evaluation.')
-    #tools.simulate(
-    #    functools.partial(agent, training=False), test_envs, episodes=1)
-    #writer.flush()
+    tools.simulate(
+        functools.partial(agent, training=False), test_envs, episodes=1)
+    writer.flush()
     # training step
     print('Start collection.')
     steps = config.eval_every // config.action_repeat

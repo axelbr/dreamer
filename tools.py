@@ -62,7 +62,10 @@ def graph_summary(writer, fn, *args):
 
 @tfplot.autowrap(figsize=(2, 2))
 def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, color='red'):
-    ax.scatter(x, y, color=color)
+  margin = 0.1
+  ax.scatter(x, y, color=color)
+  ax.set_xlim(-1 - margin, 1 + margin)
+  ax.set_ylim(-1 - margin, 1 + margin)
 
 def lidar_to_image(scan):
   angles = tf.linspace(-math.radians(270.0 / 2), math.radians(270.0 / 2), scan.shape[-1])
@@ -77,6 +80,19 @@ def lidar_to_image(scan):
       single_episode.append(data)
     video = tf.stack(single_episode)
     batch_video.append(video)
+  return tf.stack(batch_video)
+
+@tfplot.autowrap(figsize=(2, 2))
+def plot_step(x: np.ndarray, y: np.ndarray, *, ax, color='red'):
+  ax.step(x, y, color=color)
+
+def reward_to_image(reward_data):
+  batch_video = []
+  for b in range(reward_data.shape[0]):
+    r = reward_data[b, :]
+    x = range(r.shape[0])
+    img = plot_step(x, r, color="k")[:, :, :3]    # return RGBA image, then discard "alpha" channel
+    batch_video.append(img)
   return tf.stack(batch_video)
 
 import imageio

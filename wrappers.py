@@ -14,14 +14,13 @@ import racecar_gym
 
 class SingleForkedRaceCarWrapper:
 
-  def __init__(self, name, id, size=(100,)):
+  def __init__(self, name, id):
     from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv
     if name not in envs.keys():
       scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria.yml', rendering=False)
       envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario)
     self.env = envs[name]
     self._agent_ids = list(self.env.observation_space.spaces.keys())
-    self._size = size
     self._id = id
 
 
