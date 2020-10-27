@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 n_episodes = 100
-datadir = "/home/luigi/Development/dreamer/logs/racecar_2020_10_22_10_22_34/episodes"
+datadir = "/home/luigi/Development/dreamer_2/logs/racecar_26102020_rndinit_normalreward_small_models/episodes/"
 dataset = load_episodes(datadir, n_episodes)
 
 episode = next(dataset)

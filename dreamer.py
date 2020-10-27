@@ -30,7 +30,7 @@ import tools
 import wrappers
 from datetime import datetime
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
@@ -233,6 +233,7 @@ class Dreamer(tools.Module):
       if tf.equal(log_images, True):
         self._image_summaries(data, embed, image_pred)
         self._reward_summaries(data, reward_pred)
+        self._pcont_summaries(data, pcont)
 
 
   def _build_model(self):
@@ -308,7 +309,7 @@ class Dreamer(tools.Module):
         tf.stop_gradient(self._dynamics.get_feat(state))).sample()
     states = tools.static_scan(
         lambda prev, _: self._dynamics.img_step(prev, policy(prev)),
-        tf.range(self._c.horizon), start)
+          tf.range(self._c.horizon), start)
     imag_feat = self._dynamics.get_feat(states)
     return imag_feat
 
@@ -360,9 +361,19 @@ class Dreamer(tools.Module):
                         'agent/train/autoencoder', openl, self._step)
 
   def _reward_summaries(self, data, reward_pred):
-    summary_size = 6    # nr images to be shown
+    summary_size = 6  # nr images to be shown
     truth = tools.reward_to_image(data['reward'][:summary_size])
     model = tools.reward_to_image(reward_pred.mode()[:summary_size])
+    error = model - truth
+    video_image = tf.concat([truth, model, error], 1)  # note: no T dimension, then stack over dim 1
+    video_image = tf.expand_dims(video_image, axis=1)  # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
+    tools.graph_summary(self._writer, tools.video_summary,
+                        'agent/train/reward', video_image, self._step)
+
+  def _pcont_summaries(self, data, pcont):
+    summary_size = 6    # nr images to be shown
+    truth = tools.reward_to_image(data['reward'][:summary_size])
+    model = tools.reward_to_image(pcont[:summary_size])
     error = model - truth
     video_image = tf.concat([truth, model, error], 1)   # note: no T dimension, then stack over dim 1
     video_image = tf.expand_dims(video_image, axis=1)   # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
