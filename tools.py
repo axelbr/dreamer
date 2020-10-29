@@ -83,17 +83,17 @@ def lidar_to_image(scan):
   return tf.stack(batch_video)
 
 @tfplot.autowrap(figsize=(2, 2))
-def plot_step(x: np.ndarray, y: np.ndarray, *, ax, color='red'):
+def plot_step(x: np.ndarray, y: np.ndarray, *, ax, color='red', min=-1, max=1):
   margin = 0.1
   ax.step(x, y, color=color)
-  ax.set_ylim(0 - margin, 1 + margin)
+  ax.set_ylim(min - margin, max + margin)
 
 def reward_to_image(reward_data):
   batch_video = []
   for b in range(reward_data.shape[0]):
     r = reward_data[b, :]
     x = range(r.shape[0])
-    img = plot_step(x, r, color="k")[:, :, :3]    # return RGBA image, then discard "alpha" channel
+    img = plot_step(x, r, color="k", min=-100, max=15)[:, :, :3]    # return RGBA image, then discard "alpha" channel
     batch_video.append(img)
   return tf.stack(batch_video)
 

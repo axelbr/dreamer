@@ -97,6 +97,7 @@ def define_config():
   return config
 
 
+best_return_so_far = - np.Inf
 class Dreamer(tools.Module):
 
   def __init__(self, config, datadir, actspace, obspace, writer):
@@ -426,6 +427,7 @@ def load_dataset(directory, config):
 
 
 def summarize_episode(episode, config, datadir, writer, prefix):
+  global best_return_so_far
   episodes, steps = tools.count_episodes(datadir)
   length = (len(episode['reward']) - 1) * config.action_repeat
   ret = episode['reward'].sum()
@@ -442,6 +444,9 @@ def summarize_episode(episode, config, datadir, writer, prefix):
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
     if prefix == 'test' and config.obs_type in ['image', 'lidar']:
       tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
+    if episode['reward'].sum() > best_return_so_far:
+      best_return_so_far = episode['reward'].sum()
+      tools.video_summary(f'agent/{prefix}/best/video', episode['image'][None])
 
 
 
