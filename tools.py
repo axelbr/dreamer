@@ -93,7 +93,7 @@ def reward_to_image(reward_data):
   for b in range(reward_data.shape[0]):
     r = reward_data[b, :]
     x = range(r.shape[0])
-    img = plot_step(x, r, color="k", min=-100, max=15)[:, :, :3]    # return RGBA image, then discard "alpha" channel
+    img = plot_step(x, r, color="k", min=-1, max=1)[:, :, :3]    # return RGBA image, then discard "alpha" channel
     batch_video.append(img)
   return tf.stack(batch_video)
 
@@ -251,7 +251,10 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
         if balance:
           index = min(random.randint(0, total), available)
         else:
-          index = int(random.randint(0, available))
+          if random.random() < 0.50:
+            index = int(random.randint(0, available))
+          else:
+            index = available       # try: always load the end
         episode = {k: v[index: index + length] for k, v in episode.items()}
       yield episode
 

@@ -234,8 +234,6 @@ class Dreamer(tools.Module):
       if tf.equal(log_images, True):
         self._image_summaries(data, embed, image_pred)
         self._reward_summaries(data, reward_pred)
-        self._pcont_summaries(data, pcont)
-
 
   def _build_model(self):
     acts = dict(
@@ -368,16 +366,6 @@ class Dreamer(tools.Module):
     error = model - truth
     video_image = tf.concat([truth, model, error], 1)  # note: no T dimension, then stack over dim 1
     video_image = tf.expand_dims(video_image, axis=1)  # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
-    tools.graph_summary(self._writer, tools.video_summary,
-                        'agent/train/reward', video_image, self._step)
-
-  def _pcont_summaries(self, data, pcont):
-    summary_size = 6    # nr images to be shown
-    truth = tools.reward_to_image(data['reward'][:summary_size])
-    model = tools.reward_to_image(pcont[:summary_size])
-    error = model - truth
-    video_image = tf.concat([truth, model, error], 1)   # note: no T dimension, then stack over dim 1
-    video_image = tf.expand_dims(video_image, axis=1)   # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
     tools.graph_summary(self._writer, tools.video_summary,
                         'agent/train/reward', video_image, self._step)
 
