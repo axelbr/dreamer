@@ -224,7 +224,7 @@ def save_episodes(directory, episodes):
         f2.write(f1.read())
 
 
-def load_episodes(directory, rescan, length=None, balance=False, seed=0):
+def load_episodes(directory, rescan, length=None, balance=False, seed=0, tail_sampling_prob=0.25):
   directory = pathlib.Path(directory).expanduser()
   random = np.random.RandomState(seed)
   cache = {}
@@ -251,10 +251,10 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
         if balance:
           index = min(random.randint(0, total), available)
         else:
-          if random.random() < 0.7:
-            index = int(random.randint(0, available))
+          if random.random() < tail_sampling_prob:
+            index = available  # try: always load the end
           else:
-            index = available       # try: always load the end
+            index = int(random.randint(0, available))
         episode = {k: v[index: index + length] for k, v in episode.items()}
       yield episode
 
