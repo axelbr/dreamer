@@ -7,17 +7,19 @@ import traceback
 import gym
 import numpy as np
 from PIL import Image
-
-envs = {}
 import racecar_gym
 
+envs = {}
 
 class SingleForkedRaceCarWrapper:
 
-  def __init__(self, name, id):
+  def __init__(self, name, id, rendering=False):
     from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv
+    from racecar_gym.rewards.maximize_progress_reward import MaximizeProgressTask
+    from racecar_gym.core import Task, register_task
     if name not in envs.keys():
-      scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/berlin_single.yml', rendering=False)
+      register_task("maximize_progress", MaximizeProgressTask)
+      scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single.yml', rendering=rendering)
       envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario)
     self.env = envs[name]
     self._agent_ids = list(self.env.observation_space.spaces.keys())

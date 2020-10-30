@@ -432,7 +432,7 @@ def summarize_episode(episode, config, datadir, writer, prefix):
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
     if prefix == 'test' and config.obs_type in ['image', 'lidar']:
       tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
-    if episode['reward'].sum() > best_return_so_far:
+    if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
       best_return_so_far = episode['reward'].sum()
       tools.video_summary(f'agent/{prefix}/best/video', episode['image'][None])
 
@@ -451,9 +451,9 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     env = wrappers.OneHotAction(env)
   elif suite == 'racecar':
     if gui:
-      env = wrappers.SingleForkedRaceCarWrapper(id='A', name=task + '_Gui-v0')
+      env = wrappers.SingleForkedRaceCarWrapper(id='A', name=task + '_Gui-v0', rendering=gui)
     else:
-      env = wrappers.SingleForkedRaceCarWrapper(id='A', name=task + '-v0')
+      env = wrappers.SingleForkedRaceCarWrapper(id='A', name=task + '-v0', rendering=gui)
 
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
@@ -487,7 +487,7 @@ def main(config):
       str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
   train_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'train', datadir, store=True, gui=True), config.parallel)
+      config, writer, 'train', datadir, store=True, gui=False), config.parallel)
       for _ in range(config.envs)]
   test_envs = [wrappers.Async(lambda: make_env(
       config, writer, 'test', datadir, store=False, gui=False), config.parallel)
