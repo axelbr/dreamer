@@ -251,7 +251,7 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
         if balance:
           index = min(random.randint(0, total), available)
         else:
-          if random.random() < 0.50:
+          if random.random() < 0.7:
             index = int(random.randint(0, available))
           else:
             index = available       # try: always load the end
