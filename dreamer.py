@@ -246,10 +246,8 @@ class Dreamer(tools.Module):
       self._encode = models.ConvEncoder(self._c.cnn_depth, cnn_act)
       self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
     elif self._c.obs_type == 'lidar':
-      #self._encode = pretrained_models.LidarEncoder(output_dim=self._c.encoded_obs_dim)
       self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
       self._decode = models.MLPLidarDecoder(self._obspace['lidar'].shape)
-      #self._decode = pretrained_models.MLPLidarDecoder(self._c.encoded_obs_dim, cnn_act)
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
 
@@ -450,11 +448,7 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
         life_done=True, sticky_actions=True)
     env = wrappers.OneHotAction(env)
   elif suite == 'racecar':
-    if gui:
-      env = wrappers.SingleForkedRaceCarWrapper(id='A', name=task + '_Gui-v0', rendering=gui)
-    else:
-      env = wrappers.SingleForkedRaceCarWrapper(id='A', name=task + '-v0', rendering=gui)
-
+    env = wrappers.SingleForkedRaceCarWrapper(name=task + "_" + prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
   else:
@@ -470,6 +464,14 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
   return env
 
 
+def write_config_summary(config):
+  from datetime import datetime
+  text = f'created at {datetime.now().strftime("%m-%d-%Y %H:%M:%S")}\n\n'
+  for key in vars(config):
+    text += f'{key}:{getattr(config, key)}\n'
+  with open(os.path.join(config.logdir, 'config.txt'), 'w') as f:
+    f.write(text)
+
 def main(config):
   if config.gpu_growth:
     for gpu in tf.config.experimental.list_physical_devices('GPU'):
@@ -479,6 +481,7 @@ def main(config):
     prec.set_policy(prec.Policy('mixed_float16'))
   config.steps = int(config.steps)
   config.logdir.mkdir(parents=True, exist_ok=True)
+  write_config_summary(config)
   print('Logdir', config.logdir)
 
   # Create environments.
@@ -487,10 +490,10 @@ def main(config):
       str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
   train_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'train', datadir, store=True, gui=False), config.parallel)
+      config, writer, 'train', datadir, store=True, gui=True), config.parallel)
       for _ in range(config.envs)]
   test_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'test', datadir, store=False, gui=False), config.parallel)
+      config, writer, 'test', datadir, store=False, gui=True), config.parallel)
       for _ in range(config.envs)]
 
   actspace = train_envs[0].action_space
@@ -529,7 +532,6 @@ def main(config):
     state = tools.simulate(agent, train_envs, steps, state=state)
     step = count_steps(datadir, config)
     agent.save(config.logdir / 'variables.pkl')
-
 
 if __name__ == '__main__':
   try:
