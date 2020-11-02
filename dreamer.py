@@ -490,10 +490,10 @@ def main(config):
       str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
   train_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'train', datadir, store=True, gui=True), config.parallel)
+      config, writer, 'train', datadir, store=True, gui=False), config.parallel)
       for _ in range(config.envs)]
   test_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'test', datadir, store=False, gui=True), config.parallel)
+      config, writer, 'test', datadir, store=False, gui=False), config.parallel)
       for _ in range(config.envs)]
 
   actspace = train_envs[0].action_space
