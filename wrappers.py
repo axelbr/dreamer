@@ -14,10 +14,10 @@ envs = {}
 class SingleForkedRaceCarWrapper:
   def __init__(self, name, id, rendering=False):
     from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv
-    from racecar_gym.tasks.progress_based import MaximizeContinuousProgressTask
+    from racecar_gym.tasks.progress_based import MaximizeContinuousProgressTask, MaximizeDiscreteProgressTask
     from racecar_gym.tasks import Task, register_task
     if name not in envs.keys():
-      register_task("maximize_cont_progress", MaximizeContinuousProgressTask)
+      register_task("maximize_discrete_progress", MaximizeDiscreteProgressTask)
       if "train" in name:
         scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_random.yml', rendering=rendering)
       else:
