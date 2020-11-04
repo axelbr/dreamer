@@ -17,7 +17,7 @@ class SingleForkedRaceCarWrapper:
     from racecar_gym.tasks.progress_based import MaximizeContinuousProgressTask, MaximizeDiscreteProgressTask
     from racecar_gym.tasks import Task, register_task
     if name not in envs.keys():
-      register_task("maximize_discrete_progress", MaximizeDiscreteProgressTask)
+      register_task("maximize_cont_progress", MaximizeContinuousProgressTask)
       if "train" in name:
         scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_random.yml', rendering=rendering)
       else:
@@ -392,10 +392,32 @@ class NormalizeActions:
     high = np.where(self._mask, np.ones_like(self._low), self._high)
     return gym.spaces.Box(low, high, dtype=np.float32)
 
+  @property
+  def original_action_space(self):
+    return gym.spaces.Box(self._low, self._high, dtype=np.float32)
+
   def step(self, action):
     original = (action + 1) / 2 * (self._high - self._low) + self._low
     original = np.where(self._mask, original, action)
     return self._env.step(original)
+
+
+
+class GapFollowerWrapper:
+  def __init__(self, action_space):
+    from agents.gap_follower import GapFollower
+    self._gf = GapFollower()
+    # for action normalization
+    self._mask = np.logical_and(
+      np.isfinite(action_space.low),
+      np.isfinite(action_space.high))
+    self._low = np.where(self._mask, action_space.low, -1)
+    self._high = np.where(self._mask, action_space.high, 1)
+
+  def action(self, observation, **kwargs):
+    original = self._gf.action(observation)
+    action = 2 * (original - self._low) / (self._high - self._low) - 1
+    return action
 
 
 class ObsDict:

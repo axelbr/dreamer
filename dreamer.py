@@ -10,7 +10,7 @@ import math
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from agents import gap_follower
+from agents.gap_follower import GapFollower
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['MUJOCO_GL'] = 'egl'
@@ -497,10 +497,11 @@ def main(config):
   step = count_steps(datadir, config)
   prefill = max(0, config.prefill - step)
   print(f'Prefill dataset with {prefill} steps.')
-  gapfollower = gap_follower.GapFollower()
+  gapfollower = wrappers.GapFollowerWrapper(train_envs[0]._env._env.original_action_space)
 
   random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
-  tools.simulate(random_agent, train_envs, prefill / config.action_repeat)
+  gap_follower_agent = lambda o, d, _: ([gapfollower.action(o) for _ in d], None)
+  tools.simulate(gap_follower_agent, train_envs, prefill / config.action_repeat)
   writer.flush()
 
   # Train and regularly evaluate the agent.

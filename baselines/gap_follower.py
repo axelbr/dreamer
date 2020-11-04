@@ -43,9 +43,9 @@ class GapFollower:
         return center_index
 
     def action(self, observation: Dict[str, np.ndarray]) -> Tuple[float, float]:
-        scan = observation['lidar']
+        scan = observation['lidar'][0]
         proc_ranges = self.preprocess_lidar(scan, kernel_size=3)
-        min_index, max_index = 0, 999
+        min_index, max_index = 0, 1080
         proc_ranges = proc_ranges[min_index:max_index]
 
         # Find closest point to LiDAR
@@ -62,8 +62,11 @@ class GapFollower:
         best_point = min_index + self.find_best_point(start_i=gap[0], end_i=gap[1], ranges=proc_ranges)
 
         # Publish Drive message
-        angle = (-math.pi / 2 + best_point * math.pi / 999)
+        angle = (-math.pi / 2 + best_point * math.pi / 1080)
         angle = math.copysign(min(1, abs(angle)), angle)
         return np.random.normal(loc=2.0, scale=0.01), \
                np.random.normal(loc=0.3, scale=0.01), \
                np.random.normal(loc=angle, scale=0.0),
+
+    def __call__(self, observation: Dict[str, np.ndarray]) -> Tuple[float, float]:
+        return self.action(observation)
