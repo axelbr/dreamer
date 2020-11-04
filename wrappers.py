@@ -18,7 +18,9 @@ class SingleForkedRaceCarWrapper:
     from racecar_gym.tasks import Task, register_task
     if name not in envs.keys():
       register_task("maximize_cont_progress", MaximizeContinuousProgressTask)
-      if "train" in name:
+      if "prefill" in name:
+        scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_prefill_random.yml', rendering=rendering)
+      elif "train" in name:
         scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_random.yml', rendering=rendering)
       else:
         scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_index.yml', rendering=rendering)
