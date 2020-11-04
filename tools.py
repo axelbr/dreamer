@@ -181,17 +181,17 @@ def simulate(agent, envs, steps=0, episodes=0, state=None, training=True):
     # Reset envs if necessary.
     if done.any():
       indices = [index for index, d in enumerate(done) if d]
-      promises = [envs[i].reset(blocking=False) for i in indices]
-      for index, promise in zip(indices, promises):
-        obs[index] = promise()
+      obss = [envs[i].reset() for i in indices]
+      for index, o in zip(indices, obss):
+        obs[index] = o
     # Step agents.
     obs = {k: np.stack([o[k] for o in obs]) for k in obs[0]}
     action, agent_state = agent(obs, done, agent_state)
     action = np.array(action)
     assert len(action) == len(envs)
     # Step envs.
-    promises = [e.step(a, blocking=False) for e, a in zip(envs, action)]
-    obs, _, done = zip(*[p()[:3] for p in promises])
+    obss = [e.step(a) for e, a in zip(envs, action)]
+    obs, _, done = zip(*[p[:3] for p in obss])
     obs = list(obs)
     done = np.stack(done)
     episode += int(done.sum())

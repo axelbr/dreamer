@@ -432,9 +432,8 @@ def summarize_episode(episode, config, datadir, writer, prefix):
       tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
     if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
       best_return_so_far = episode['reward'].sum()
-      tools.video_summary(f'agent/{prefix}/best/video', episode['image'][None])
-
-
+      if step > config.prefill:
+        tools.video_summary(f'agent/{prefix}/best/video', episode['image'][None])
 
 def make_env(config, writer, prefix, datadir, store, gui=False):
   suite, task = config.task.split('_', 1)
@@ -453,7 +452,6 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     env = wrappers.NormalizeActions(env)
   else:
     raise NotImplementedError(suite)
-  env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
   callbacks = []
   if store:
     callbacks.append(lambda ep: tools.save_episodes(datadir, [ep]))
@@ -489,12 +487,8 @@ def main(config):
   writer = tf.summary.create_file_writer(
       str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
-  train_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'train', datadir, store=True, gui=False), config.parallel)
-      for _ in range(config.envs)]
-  test_envs = [wrappers.Async(lambda: make_env(
-      config, writer, 'test', datadir, store=False, gui=False), config.parallel)
-      for _ in range(config.envs)]
+  train_envs = [make_env(config, writer, 'train', datadir, store=True, gui=False)]
+  test_envs = [make_env(config, writer, 'test', datadir, store=False, gui=False)]
 
   actspace = train_envs[0].action_space
   obspace = train_envs[0].observation_space
