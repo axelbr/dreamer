@@ -252,7 +252,7 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0, tail_sa
           index = min(random.randint(0, total), available)
         else:
           if random.random() < tail_sampling_prob:
-            index = available-1  # try: always load the end
+            index = available     # always load the end
           else:
             index = int(random.randint(0, available))
         episode = {k: v[index: index + length] for k, v in episode.items()}
