@@ -428,12 +428,13 @@ def summarize_episode(episode, config, datadir, writer, prefix):
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
-    if prefix == 'test' and config.obs_type in ['image', 'lidar']:
-      tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
-    if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
-      best_return_so_far = episode['reward'].sum()
-      if step > config.prefill:
-        tools.video_summary(f'agent/{prefix}/best/video', episode['image'][None])
+    if config.log_images:
+      if prefix == 'test' and config.obs_type in ['image', 'lidar']:
+        tools.video_summary(f'sim/{prefix}/video', episode['image'][None])
+      if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
+        best_return_so_far = episode['reward'].sum()
+        if step > config.prefill:
+          tools.video_summary(f'agent/{prefix}/best/video', episode['image'][None])
 
 def make_env(config, writer, prefix, datadir, store, gui=False):
   suite, task = config.task.split('_', 1)
