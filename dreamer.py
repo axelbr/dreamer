@@ -94,6 +94,7 @@ def define_config():
   config.expl_amount = 0.3
   config.expl_decay = 0.0
   config.expl_min = 0.0
+  config.tail_episode_pr = 0.0
   return config
 
 
@@ -404,13 +405,12 @@ def load_dataset(directory, config):
   shapes = {k: (None,) + v.shape[1:] for k, v in episode.items()}
   generator = lambda: tools.load_episodes(
       directory, config.train_steps, config.batch_length,
-      config.dataset_balance)
+      config.dataset_balance, tail_sampling_prob=config.tail_episode_pr)
   dataset = tf.data.Dataset.from_generator(generator, types, shapes)
   dataset = dataset.batch(config.batch_size, drop_remainder=True)
   dataset = dataset.map(functools.partial(preprocess, config=config))
   dataset = dataset.prefetch(10)
   return dataset
-
 
 def summarize_episode(episode, config, datadir, writer, prefix):
   global best_return_so_far
