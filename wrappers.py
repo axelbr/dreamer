@@ -20,11 +20,13 @@ class SingleForkedRaceCarWrapper:
       register_task("maximize_cont_progress", MaximizeContinuousProgressTask)
       if "prefill" in name:
         scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_prefill_random.yml', rendering=rendering)
+        envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
       elif "train" in name:
         scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_random.yml', rendering=rendering)
+        envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
       else:
         scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_index.yml', rendering=rendering)
-      envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario)
+        envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario, mode='grid')
     self.env = envs[name]
     self._agent_ids = list(self.env.observation_space.spaces.keys())
     self._id = id
