@@ -390,6 +390,9 @@ def preprocess(obs, config):
   with tf.device('cpu:0'):
     obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
     obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
+    # note: instead of creating angles and then normalize them, we can directly create the linspace in the norm interval
+    angles = tf.expand_dims(tf.linspace(-0.5, 0.5, obs['lidar'].shape[-1]), axis=0)   # already normalized in +-.5
+    obs['polar_coords'] = tf.cast(tf.concat([obs['lidar'], angles], axis=0), dtype)
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
     obs['reward'] = clip_rewards(obs['reward'])
   return obs
@@ -407,8 +410,8 @@ def load_dataset(directory, config):
       directory, config.train_steps, config.batch_length,
       config.dataset_balance, tail_sampling_prob=config.tail_episode_pr)
   dataset = tf.data.Dataset.from_generator(generator, types, shapes)
-  dataset = dataset.batch(config.batch_size, drop_remainder=True)
   dataset = dataset.map(functools.partial(preprocess, config=config))
+  dataset = dataset.batch(config.batch_size, drop_remainder=True)
   dataset = dataset.prefetch(10)
   return dataset
 
