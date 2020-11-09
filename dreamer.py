@@ -153,7 +153,7 @@ class Dreamer(tools.Module):
       action = tf.zeros((len(obs[self._c.obs_type]), self._actdim), self._float)
     else:
       latent, action = state
-    if self._c.obs_type == 'image':
+    if self._c.obs_type in ['image', 'lidar']:
       embed = self._encode(preprocess(obs, self._c))
     else:
       embed = self._encode(obs)
