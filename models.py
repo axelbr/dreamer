@@ -21,10 +21,10 @@ class RSSM(tools.Module):
   def initial(self, batch_size):
     dtype = prec.global_policy().compute_dtype
     return dict(
-        mean=tf.zeros([batch_size, self._stoch_size], dtype),
-        std=tf.zeros([batch_size, self._stoch_size], dtype),
-        stoch=tf.zeros([batch_size, self._stoch_size], dtype),
-        deter=self._cell.get_initial_state(None, batch_size, dtype))
+      mean=tf.zeros([batch_size, self._stoch_size], dtype),
+      std=tf.zeros([batch_size, self._stoch_size], dtype),
+      stoch=tf.zeros([batch_size, self._stoch_size], dtype),
+      deter=self._cell.get_initial_state(None, batch_size, dtype))
 
   @tf.function
   def observe(self, embed, action, state=None):
@@ -33,8 +33,8 @@ class RSSM(tools.Module):
     embed = tf.transpose(embed, [1, 0, 2])
     action = tf.transpose(action, [1, 0, 2])
     post, prior = tools.static_scan(
-        lambda prev, inputs: self.obs_step(prev[0], *inputs),
-        (action, embed), (state, state))
+      lambda prev, inputs: self.obs_step(prev[0], *inputs),
+      (action, embed), (state, state))
     post = {k: tf.transpose(v, [1, 0, 2]) for k, v in post.items()}
     prior = {k: tf.transpose(v, [1, 0, 2]) for k, v in prior.items()}
     return post, prior
@@ -57,14 +57,14 @@ class RSSM(tools.Module):
 
   @tf.function
   def obs_step(self, prev_state, prev_action, embed):
-    prior = self.img_step(prev_state, prev_action)    # get distribution+ of the current state
+    prior = self.img_step(prev_state, prev_action)  # get distribution+ of the current state
     x = tf.concat([prior['deter'], embed], -1)
     x = self.get('obs1', tfkl.Dense, self._hidden_size, self._activation)(x)
     x = self.get('obs2', tfkl.Dense, 2 * self._stoch_size, None)(x)
     mean, std = tf.split(x, 2, -1)
     std = tf.nn.softplus(std) + 0.1
     stoch = self.get_dist({'mean': mean, 'std': std}).sample()
-    post = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': prior['deter']}    # get distr+ of next state
+    post = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': prior['deter']}  # get distr+ of next state
     return post, prior
 
   @tf.function
@@ -81,31 +81,34 @@ class RSSM(tools.Module):
     prior = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': deter}
     return prior
 
+
 class LidarEncoder(tools.Module):
-  def __init__(self,  output_dim, act=tf.nn.relu):
+  def __init__(self, output_dim, act=tf.nn.relu, obs_type="lidar"):
     self._act = act
     self._output_dim = output_dim
+    self._obs_type = obs_type
 
   def __call__(self, obs):
-    kwargs = dict(strides=1, activation=self._act, padding='same')
-    lidar = obs['lidar']
-    if len(lidar.shape) > 2:
-      x = tf.reshape(lidar, shape=(-1, *lidar.shape[2:], 1))
+    kwargs = dict(strides=3, activation=self._act, padding='same')
+    obs = obs[self._obs_type]
+    if len(obs.shape) > 2:
+      x = tf.reshape(obs, shape=(-1, *x.shape[2:], 1))
     else:
-      x = tf.expand_dims(lidar, axis=-1)
+      x = tf.expand_dims(obs, axis=-1)
     x = self.get('conv1', tfkl.Conv1D, filters=4, kernel_size=5, **kwargs)(x)
     x = self.get('conv2', tfkl.Conv1D, filters=8, kernel_size=3, **kwargs)(x)
     x = self.get('flat', tfkl.Flatten)(x)
-    x = self.get('dense', tfkl.Dense, units=self._output_dim)(x)
 
-    shape = (*lidar.shape[:-1], *x.shape[1:])
+    shape = (*obs.shape[:-1], *x.shape[1:])
     return tf.reshape(x, shape=shape)
+
 
 class MLPLidarEncoder(tools.Module):
   def __init__(self, latent_dim, act=tf.nn.relu):
     self._act = act
     self._output_dim = latent_dim
     self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(self._output_dim), scale=1), reinterpreted_batch_ndims=1)
+
   def __call__(self, obs):
     if type(obs) == dict:
       lidar = obs['lidar']
@@ -124,6 +127,7 @@ class MLPLidarEncoder(tools.Module):
     x = dist.sample()
     shape = (*lidar.shape[:-1], *x.shape[1:])
     return tf.reshape(x, shape=shape)
+
 
 class MLPLidarDecoder(tools.Module):
   def __init__(self, shape, act=tf.nn.relu):
@@ -144,6 +148,7 @@ class MLPLidarDecoder(tools.Module):
     dist = tfd.BatchReshape(x, batch_shape=features.shape[:2])
     return dist
 
+
 class LidarDecoder(tools.Module):
 
   def __init__(self, output_dim, act=tf.nn.relu):
@@ -158,20 +163,26 @@ class LidarDecoder(tools.Module):
     dist = tfd.BatchReshape(x, batch_shape=features.shape[:2])
     return dist
 
+
 class ConvEncoder(tools.Module):
 
-  def __init__(self, depth=32, act=tf.nn.relu):
+  def __init__(self, depth=32, act=tf.nn.relu, obs_type="image"):
     self._act = act
     self._depth = depth
+    self._obs_type = obs_type
 
   def __call__(self, obs):
     kwargs = dict(strides=2, activation=self._act)
-    x = tf.reshape(obs['image'], (-1,) + tuple(obs['image'].shape[-3:]))
+    if self._obs_type == 'polar_coords':
+      x = tf.expand_dims(obs[self._obs_type], -1)
+    else:
+      x = obs[self._obs_type]
+    x = tf.reshape(x, (-1,) + tuple(x.shape[-3:]))
     x = self.get('h1', tfkl.Conv2D, 1 * self._depth, 4, **kwargs)(x)
     x = self.get('h2', tfkl.Conv2D, 2 * self._depth, 4, **kwargs)(x)
     x = self.get('h3', tfkl.Conv2D, 4 * self._depth, 4, **kwargs)(x)
     x = self.get('h4', tfkl.Conv2D, 8 * self._depth, 4, **kwargs)(x)
-    shape = tf.concat([tf.shape(obs['image'])[:-3], [32 * self._depth]], 0)
+    shape = tf.concat([tf.shape(obs[self._obs_type])[:-3], [32 * self._depth]], 0)
     return tf.reshape(x, shape)
 
 
@@ -192,7 +203,6 @@ class ConvDecoder(tools.Module):
     x = self.get('h5', tfkl.Conv2DTranspose, self._shape[-1], 6, strides=2)(x)
     mean = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
     return tfd.Independent(tfd.Normal(mean, 1), len(self._shape))
-
 
 
 class DenseDecoder(tools.Module):
@@ -220,8 +230,8 @@ class DenseDecoder(tools.Module):
 class ActionDecoder(tools.Module):
 
   def __init__(
-      self, size, layers, units, dist='tanh_normal', act=tf.nn.elu,
-      min_std=1e-4, init_std=5, mean_scale=5):
+          self, size, layers, units, dist='tanh_normal', act=tf.nn.elu,
+          min_std=1e-4, init_std=5, mean_scale=5):
     self._size = size
     self._layers = layers
     self._units = units

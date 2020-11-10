@@ -153,7 +153,7 @@ class Dreamer(tools.Module):
       action = tf.zeros((len(obs[self._c.obs_type]), self._actdim), self._float)
     else:
       latent, action = state
-    if self._c.obs_type in ['image', 'lidar']:
+    if self._c.obs_type in ['image', 'lidar', 'polar_coords']:
       embed = self._encode(preprocess(obs, self._c))
     else:
       embed = self._encode(obs)
@@ -249,6 +249,8 @@ class Dreamer(tools.Module):
     elif self._c.obs_type == 'lidar':
       self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
       self._decode = models.MLPLidarDecoder(self._obspace['lidar'].shape)
+    elif self._c.obs_type == 'polar_coords':
+      raise NotImplementedError("polar coordinates not supported yet")
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
 
@@ -390,9 +392,7 @@ def preprocess(obs, config):
   with tf.device('cpu:0'):
     obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
     obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
-    # note: instead of creating angles and then normalize them, we can directly create the linspace in the norm interval
-    angles = tf.expand_dims(tf.linspace(-0.5, 0.5, obs['lidar'].shape[-1]), axis=0)   # already normalized in +-.5
-    obs['polar_coords'] = tf.cast(tf.concat([obs['lidar'], angles], axis=0), dtype)
+    obs['polar_coords'] = (tf.cast(obs['polar_coords'], dtype) - [[0], [270.0/2]]) / [[5.0], [270.0]] - .5
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
     obs['reward'] = clip_rewards(obs['reward'])
   return obs
@@ -454,6 +454,7 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     env = wrappers.SingleForkedRaceCarWrapper(name=task + "_" + prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
+    env = wrappers.PolarObs(env)
   else:
     raise NotImplementedError(suite)
   callbacks = []
