@@ -5,7 +5,7 @@ agents:
   - id: A
     vehicle:
       name: racecar
-      sensors: [lidar, gps, imu, tacho, low_res_camera]
+      sensors: [lidar]
     task:
-      task_name: segment_progress
+      task_name: maximize_cont_progress
       params: {laps: 1, time_limit: 120.0, terminate_on_collision: True}
