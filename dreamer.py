@@ -51,6 +51,7 @@ def define_config():
   config.parallel = 'none'
   config.action_repeat = 4
   config.time_limit = 3000
+  config.prefill_agent = 'random'
   config.prefill = 5000
   config.eval_noise = 0.0
   config.clip_rewards = 'none'
@@ -503,11 +504,16 @@ def main(config):
   step = count_steps(datadir, config)
   prefill = max(0, config.prefill - step)
   print(f'Prefill dataset with {prefill} steps.')
-  gapfollower = wrappers.GapFollowerWrapper(train_envs[0]._env._env.original_action_space)
 
-  #random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
-  gap_follower_agent = lambda o, d, _: ([gapfollower.action(o) for _ in d], None)
-  tools.simulate(gap_follower_agent, prefill_envs, prefill / config.action_repeat)
+  if config.prefill_agent=='random':
+    random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
+    tools.simulate(random_agent, prefill_envs, prefill / config.action_repeat)
+  elif config.prefill_agent=='gap_follower':
+    gapfollower = wrappers.GapFollowerWrapper(train_envs[0]._env._env.original_action_space)
+    gap_follower_agent = lambda o, d, _: ([gapfollower.action(o) for _ in d], None)
+    tools.simulate(gap_follower_agent, prefill_envs, prefill / config.action_repeat)
+  else:
+    raise NotImplementedError(f'prefill agent {config.prefill_agent} not implemented')
   writer.flush()
 
   # Train and regularly evaluate the agent.
