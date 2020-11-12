@@ -132,6 +132,19 @@ def create_reconstruction_gif(lidar, embed, recon_dist, distribution=True, norma
   video = tf.concat([lidar_img, recon_img], 1)
   flat_gif_summary(video, name=name)
 
+@tfplot.autowrap(figsize=(2, 2))
+def plot_text_on_image(rgb_img: np.ndarray, text: np.ndarray, *, ax, color='red'):
+  ax.imshow(rgb_img)
+  ax.text(rgb_img.shape[0] / 2 - 10, rgb_img.shape[1] / 2 + 20, f'{text}')
+
+def overimpose_speed_on_frames(images, speeds):
+  assert len(images) == len(speeds)
+  frames = []
+  for img, speed in zip(images, speeds):
+    frame = plot_text_on_image(img, "{:.2f}".format(speed))[:, :, :3]  # return RGBA image, then discard "alpha" channel
+    frames.append(frame)
+  return np.stack(frames)
+
 def video_summary(name, video, step=None, fps=25):
   name = name if isinstance(name, str) else name.decode('utf-8')
   if np.issubdtype(video.dtype, np.floating):

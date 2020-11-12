@@ -544,6 +544,31 @@ class PolarObs:
     obs['polar_coords'] = np.vstack([obs['lidar'], angles])
     return obs
 
+class SpeedObs:
+
+  def __init__(self, env):
+    self._env = env
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
+  @property
+  def observation_space(self):
+    spaces = self._env.observation_space.spaces
+    assert 'speed' not in spaces
+    spaces['speed'] = gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32)
+    return gym.spaces.Dict(spaces)
+
+  def step(self, action):
+    obs, reward, done, info = self._env.step(action)
+    obs['speed'] = np.linalg.norm(info['velocity'])
+    return obs, reward, done, info
+
+  def reset(self):
+    obs = self._env.reset()
+    obs['speed'] = 0.0
+    return obs
+
 
 class Async:
 
