@@ -83,17 +83,18 @@ def lidar_to_image(scan):
   return tf.stack(batch_video)
 
 @tfplot.autowrap(figsize=(2, 2))
-def plot_step(x: np.ndarray, y: np.ndarray, *, ax, color='red', min=-1, max=1):
+def plot_step(x: np.ndarray, y: np.ndarray, *, ax, color='k', min_y=-1, max_y=1):
   margin = 0.1
   ax.step(x, y, color=color)
-  ax.set_ylim(min - margin, max + margin)
+  ax.text(x[0] + margin, min_y + margin, 'return={:.2f}'.format(np.sum(y)))
+  ax.set_ylim(min_y - margin, max_y + margin)
 
 def reward_to_image(reward_data):
   batch_video = []
   for b in range(reward_data.shape[0]):
     r = reward_data[b, :]
     x = range(r.shape[0])
-    img = plot_step(x, r, color="k", min=-1, max=1)[:, :, :3]    # return RGBA image, then discard "alpha" channel
+    img = plot_step(x, r, min_y=-1, max_y=1)[:, :, :3]    # return RGBA image, then discard "alpha" channel
     batch_video.append(img)
   return tf.stack(batch_video)
 
@@ -131,7 +132,7 @@ def create_reconstruction_gif(lidar, embed, recon_dist, distribution=True, norma
   video = tf.concat([lidar_img, recon_img], 1)
   flat_gif_summary(video, name=name)
 
-def video_summary(name, video, step=None, fps=20):
+def video_summary(name, video, step=None, fps=25):
   name = name if isinstance(name, str) else name.decode('utf-8')
   if np.issubdtype(video.dtype, np.floating):
     video = np.clip(255 * video, 0, 255).astype(np.uint8)

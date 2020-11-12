@@ -5,24 +5,25 @@ import threading
 import traceback
 
 import gym
+import racecar_gym
 import numpy as np
 from PIL import Image
-import racecar_gym
 
 envs = {}
 
 class SingleForkedRaceCarWrapper:
   def __init__(self, name, id, rendering=False):
     from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv
-    from racecar_gym.tasks.progress_based import MaximizeContinuousProgressTask, MaximizeDiscreteProgressTask
+    from racecar_gym.envs.multi_agent_race import MultiAgentScenario
     from racecar_gym.tasks import Task, register_task
+    from racecar_gym.tasks.progress_based import MaximizeProgressTask
     if name not in envs.keys():
-      register_task("maximize_cont_progress", MaximizeContinuousProgressTask)
+      register_task("maximize_cont_progress", MaximizeProgressTask)
       if "prefill" in name:
-        scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_prefill_random.yml', rendering=rendering)
+        scenario = MultiAgentScenario.from_spec('scenarios/austria_single_prefill_random.yml', rendering=rendering)
         envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
       elif "train" in name:
-        scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_random.yml', rendering=rendering)
+        scenario = MultiAgentScenario.from_spec('scenarios/austria_single_random.yml', rendering=rendering)
         envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
       else:
         scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_index.yml', rendering=rendering)

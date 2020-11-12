@@ -235,7 +235,7 @@ class Dreamer(tools.Module):
             actor_norm)
       if tf.equal(log_images, True):
         self._image_summaries(data, embed, image_pred)
-        #self._reward_summaries(data, reward_pred)
+        self._reward_summaries(data, reward_pred)
 
   def _build_model(self):
     acts = dict(
