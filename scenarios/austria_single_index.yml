@@ -7,5 +7,5 @@ agents:
       name: racecar
       sensors: [lidar, low_res_camera]
     task:
-      task_name: maximize_fast_progress
+      task_name: maximize_progress
       params: {laps: 2, time_limit: 30.0, terminate_on_collision: True}
