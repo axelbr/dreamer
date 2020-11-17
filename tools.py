@@ -61,13 +61,13 @@ def graph_summary(writer, fn, *args):
   return tf.numpy_function(inner, args, [])
 
 @tfplot.autowrap(figsize=(2, 2))
-def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, color='red'):
+def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, minv=-1, maxv=+1, color='red'):
   margin = 0.1
   ax.scatter(x, y, color=color)
-  ax.set_xlim(-1 - margin, 1 + margin)
-  ax.set_ylim(-1 - margin, 1 + margin)
+  ax.set_xlim(minv - margin, maxv + margin)
+  ax.set_ylim(minv - margin, maxv + margin)
 
-def lidar_to_image(scan):
+def lidar_to_image(scan, minv=-1, maxv=+1):
   angles = tf.linspace(-math.radians(270.0 / 2), math.radians(270.0 / 2), scan.shape[-1])
   #angles = tf.cast(angles, tf.float16)
   batch_video = []
@@ -76,7 +76,7 @@ def lidar_to_image(scan):
     for t in range(scan.shape[1]):
       x = scan[b, t, :] * tf.cos(angles)
       y = scan[b, t, :] * tf.sin(angles)
-      data = plot_scatter(x, y, color="k")[:, :, :3]    # return RGBA image, then discard "alpha" channel
+      data = plot_scatter(x, y, minv=minv, maxv=maxv, color="k")[:, :, :3]    # return RGBA image, then discard "alpha" channel
       single_episode.append(data)
     video = tf.stack(single_episode)
     batch_video.append(video)

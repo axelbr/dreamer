@@ -75,7 +75,7 @@ def define_config():
   config.check_load_pretrained_encoder = tools.Once() if config.use_pretrained_encoder else lambda : False
   config.pretrained_encoder_path = "racing_dreamer/pretrained_models/pretrained_encoder"
   # Training.
-  config.batch_size = 64
+  config.batch_size = 50
   config.batch_length = 50
   config.train_every = 1000
   config.train_steps = 100
@@ -433,9 +433,10 @@ def summarize_episode(episode, config, datadir, writer, prefix):
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
     if prefix == 'test' and config.obs_type in ['image', 'lidar']:
-
       images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
-      tools.video_summary(f'sim/{prefix}/video', images[None])
+      lidars = tools.lidar_to_image(episode['lidar'][None], minv=-5, maxv=+5)[0].numpy()
+      tools.video_summary(f'sim/{prefix}/camera', images[None])
+      tools.video_summary(f'sim/{prefix}/lidar', lidars[None])
     if config.log_images:
       if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
         best_return_so_far = episode['reward'].sum()
