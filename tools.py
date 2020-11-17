@@ -68,7 +68,8 @@ def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, minv=-1, maxv=+1, color='r
   ax.set_ylim(minv - margin, maxv + margin)
 
 def lidar_to_image(scan, minv=-1, maxv=+1):
-  angles = tf.linspace(-math.radians(270.0 / 2), math.radians(270.0 / 2), scan.shape[-1])
+  # shift pi/2 just to align for visualization
+  angles = tf.linspace(math.pi/2-math.radians(270.0 / 2), math.pi/2 + math.radians(270.0 / 2), scan.shape[-1])[::-1]
   #angles = tf.cast(angles, tf.float16)
   batch_video = []
   for b in range(scan.shape[0]):

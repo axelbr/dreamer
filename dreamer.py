@@ -435,8 +435,8 @@ def summarize_episode(episode, config, datadir, writer, prefix):
     if prefix == 'test' and config.obs_type in ['image', 'lidar']:
       images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
       lidars = tools.lidar_to_image(episode['lidar'][None], minv=-5, maxv=+5)[0].numpy()
-      tools.video_summary(f'sim/{prefix}/camera', images[None])
-      tools.video_summary(f'sim/{prefix}/lidar', lidars[None])
+      tools.video_summary(f'sim/{prefix}/video', np.concatenate([images, lidars], axis=2)[None])
+      #tools.video_summary(f'sim/{prefix}/lidar', lidars[None])
     if config.log_images:
       if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
         best_return_so_far = episode['reward'].sum()
