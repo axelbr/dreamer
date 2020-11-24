@@ -63,11 +63,11 @@ def graph_summary(writer, fn, *args):
 @tfplot.autowrap(figsize=(2, 2))
 def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, minv=-1, maxv=+1, color='red'):
   margin = 0.1
-  ax.scatter(x, y, color=color)
+  ax.scatter(x, y, c=color)
   ax.set_xlim(minv - margin, maxv + margin)
   ax.set_ylim(minv - margin, maxv + margin)
 
-def lidar_to_image(scan, minv=-1, maxv=+1):
+def lidar_to_image(scan, minv=-1, maxv=+1, color="k"):
   # shift pi/2 just to align for visualization
   angles = tf.linspace(math.pi/2-math.radians(270.0 / 2), math.pi/2 + math.radians(270.0 / 2), scan.shape[-1])[::-1]
   #angles = tf.cast(angles, tf.float16)
@@ -77,7 +77,7 @@ def lidar_to_image(scan, minv=-1, maxv=+1):
     for t in range(scan.shape[1]):
       x = scan[b, t, :] * tf.cos(angles)
       y = scan[b, t, :] * tf.sin(angles)
-      data = plot_scatter(x, y, minv=minv, maxv=maxv, color="k")[:, :, :3]    # return RGBA image, then discard "alpha" channel
+      data = plot_scatter(x, y, minv=minv, maxv=maxv, color=color[b, t, :])[:, :, :3]    # return RGBA image, then discard "alpha" channel
       single_episode.append(data)
     video = tf.stack(single_episode)
     batch_video.append(video)
@@ -108,30 +108,27 @@ def gif_summary(video, fps=30, name="lidar"):
     frames.append(video[i].numpy().astype(np.uint8))
   imageio.mimsave('./{}.gif'.format(name), frames)
 
-def flat_gif_summary(video, fps=30, name="lidar"):
+def flat_gif_summary(video, fps=25, name="lidar"):
   frames = []
   for i in range(video.shape[0]):
     frames.append(video[i].numpy().astype(np.uint8))
-  imageio.mimsave('./{}.gif'.format(name), frames)
+  imageio.mimsave('./{}.gif'.format(name), frames, fps=fps)
 
-def create_reconstruction_gif(lidar, embed, recon_dist, distribution=True, normalized=True, name="lidar"):
-  if not distribution:
-    recon = recon_dist
-  else:
-    recon = recon_dist.mode()
-  if len(lidar.shape) < 3:
-    lidar = tf.expand_dims(lidar, axis=0)
+def create_reconstruction_gif(lidar_distances, lidar_obstacles, recon_dist, obstacle_bin_distr, name="lidar"):
+  recon = recon_dist.mode()
+  obst_detection = obstacle_bin_distr.mode()
+  if len(lidar_distances.shape) < 3:
+    lidar_distances = tf.expand_dims(lidar_distances, axis=0)
   if len(recon.shape) < 3:
     recon = tf.expand_dims(recon, axis=0)
   else:
     recon = tf.reshape(recon, [1, *recon.shape[:2]])
-  if normalized:
-    lidar = lidar * 5.0
-    recon = recon * 5.0
-  lidar_img = lidar_to_image(lidar)
-  recon_img = lidar_to_image(recon)
-  video = tf.concat([lidar_img, recon_img], 1)
-  flat_gif_summary(video, name=name)
+  true_color = np.expand_dims(np.where(lidar_obstacles >= 1, 'k', 'grey'), 0)
+  recon_color = np.expand_dims(np.where(obst_detection>=1, 'k', 'grey'), 0)
+  lidar_img = lidar_to_image(lidar_distances, color=true_color)
+  recon_img = lidar_to_image(recon, color=recon_color)
+  video = tf.concat([lidar_img, recon_img], 2)
+  flat_gif_summary(video[0], name=name)
 
 @tfplot.autowrap(figsize=(2, 2))
 def plot_text_on_image(rgb_img: np.ndarray, text: np.ndarray, *, ax, color='red'):
