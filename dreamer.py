@@ -154,10 +154,8 @@ class Dreamer(tools.Module):
       action = tf.zeros((len(obs[self._c.obs_type]), self._actdim), self._float)
     else:
       latent, action = state
-    if self._c.obs_type in ['image', 'lidar', 'polar_coords']:
-      embed = self._encode(preprocess(obs, self._c))
-    else:
-      embed = self._encode(obs)
+    # note: no need preprocessing of observation because of the wrapper NormalizeObservations
+    embed = self._encode(obs)
     latent, _ = self._dynamics.obs_step(latent, action, embed)
     feat = self._dynamics.get_feat(latent)
     if training:
@@ -386,19 +384,6 @@ class Dreamer(tools.Module):
     print(f'[{step}]', ' / '.join(f'{k} {v:.1f}' for k, v in metrics))
     self._writer.flush()
 
-
-def preprocess(obs, config):
-  dtype = prec.global_policy().compute_dtype
-  obs = obs.copy()
-  with tf.device('cpu:0'):
-    obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
-    obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
-    obs['polar_coords'] = (tf.cast(obs['polar_coords'], dtype) - [[0], [270.0/2]]) / [[5.0], [270.0]] - .5
-    clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
-    obs['reward'] = clip_rewards(obs['reward'])
-  return obs
-
-
 def count_steps(datadir, config):
   return tools.count_episodes(datadir)[1] * config.action_repeat
 
@@ -411,7 +396,6 @@ def load_dataset(directory, config):
       directory, config.train_steps, config.batch_length,
       config.dataset_balance, tail_sampling_prob=config.tail_episode_pr)
   dataset = tf.data.Dataset.from_generator(generator, types, shapes)
-  dataset = dataset.map(functools.partial(preprocess, config=config))
   dataset = dataset.batch(config.batch_size, drop_remainder=True)
   dataset = dataset.prefetch(10)
   return dataset
@@ -433,10 +417,10 @@ def summarize_episode(episode, config, datadir, writer, prefix):
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
     if prefix == 'test' and config.obs_type in ['image', 'lidar']:
+      obs = {'lidar': episode['lidar'] + .5}
       images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
-      lidars = tools.lidar_to_image(episode['lidar'][None], minv=-5, maxv=+5)[0].numpy()
+      lidars = tools.lidar_to_image(obs['lidar'][None])[0].numpy()
       tools.video_summary(f'sim/{prefix}/video', np.concatenate([images, lidars], axis=2)[None])
-      #tools.video_summary(f'sim/{prefix}/lidar', lidars[None])
     if config.log_images:
       if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
         best_return_so_far = episode['reward'].sum()
@@ -459,7 +443,7 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     env = wrappers.SingleForkedRaceCarWrapper(name=task + "_" + prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
-    env = wrappers.PolarObs(env)
+    env = wrappers.NormalizeObservations(env)
     env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)

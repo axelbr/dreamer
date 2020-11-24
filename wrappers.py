@@ -407,6 +407,41 @@ class NormalizeActions:
     original = np.where(self._mask, original, action)
     return self._env.step(original)
 
+class NormalizeObservations:
+  def __init__(self, env):
+    self._env = env
+    self._mask = {obs_type: np.logical_and(
+                                      np.isfinite(env.observation_space[obs_type].low),
+                                      np.isfinite(env.observation_space[obs_type].high)
+                                    ) for obs_type in env.observation_space.spaces.keys()}
+    self._low = {obs_type: np.where(self._mask, env.observation_space[obs_type].low, -1)
+                 for obs_type in env.observation_space.spaces.keys()}
+    self._high = {obs_type: np.where(self._mask, env.observation_space[obs_type].high, 1)
+                 for obs_type in env.observation_space.spaces.keys()}
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
+  @property
+  def observation_space(self):
+    space = {}
+    for obs_type in self._env.observation_space.spaces.keys():
+      low = np.where(self._mask[obs_type], -np.ones_like(self._low[obs_type]), self._low[obs_type])
+      high = np.where(self._mask[obs_type], np.ones_like(self._low[obs_type]), self._high[obs_type])
+      space[obs_type] = gym.spaces.Box(low, high, dtype=np.float32)
+    return gym.spaces.Dict(space)
+
+  @property
+  def original_observation_space(self):
+    return self._env.observation_space
+
+  def step(self, action):
+    original_obs, reward, done, info = self._env.step(action)
+    obs = original_obs
+    for obs_type in self._env.observation_space.spaces.keys():
+      obs[obs_type] = (original_obs[obs_type] - self._low[obs_type]) / (self._high[obs_type] - self._low[obs_type]) - 0.5
+      obs[obs_type] = np.where(self._mask[obs_type], original_obs[obs_type], obs[obs_type])
+    return obs, reward, done, info
 
 
 class GapFollowerWrapper:
