@@ -13,11 +13,11 @@ config_env_files = ['random_starts_austria.yml']
 sim_rendering = False
 assert(len(config_env_files) < 2 or not sim_rendering), "cause by PyBullet re-init of env's GUIs, set rendering=False"
 
-n_episodes_x_track = 2000
-n_obs_per_trace = 500                  # e.g. 100 lidar acquisitions = 4 seconds
+n_episodes_x_track = 1000
+n_obs_per_trace = 100                  # e.g. 100 lidar acquisitions = 4 seconds
 
 def create_h5_filepath(config_file, episodes=n_episodes_x_track, max_obs=n_obs_per_trace, out_dir=output_dir):
-    prefix = "dataset_single_agent_austria"
+    prefix = "dataset_single_agent_austria_lidar30"
     config_details = "{}episodes_{}steps".format(episodes, max_obs)
     track_name = config_file.split(".")[:-1][0]
     timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
@@ -30,9 +30,11 @@ def create_wrapped_env(config_file, conf_dir=config_dir, rendering=sim_rendering
     return env
 
 def debug(i_episode, n_chars_debug_line=25):
-    print(".", end=" ")
     if i_episode > 0 and i_episode % n_chars_debug_line == 0:
-        print()
+      print()
+      print(f'{i_episode} ')
+    print(".", end=" ")
+
 
 for config_file in config_env_files:
     env = create_wrapped_env(config_file)
@@ -41,7 +43,7 @@ for config_file in config_env_files:
 
     print("\n[Info] Simulation {} traces for {} seconds".format(n_episodes_x_track, n_obs_per_trace * 0.04))
     for i_episode in range(n_episodes_x_track):
-        debug(i_episode)
+        debug(i_episode+1)
         episode = rlephant.Episode()
         obs = env.reset(mode='random')
         done = False

@@ -125,6 +125,19 @@ def create_reconstruction_gif(lidar_distances, lidar_obstacles, recon_dist, obst
   video = tf.concat([lidar_img, recon_img], 2)
   flat_gif_summary(video[0], name=name)
 
+def create_reconstruction_gif(lidar_distances, recon_dist, name="lidar"):
+  recon = recon_dist.mode()
+  if len(lidar_distances.shape) < 3:
+    lidar_distances = tf.expand_dims(lidar_distances, axis=0)
+  if len(recon.shape) < 3:
+    recon = tf.expand_dims(recon, axis=0)
+  else:
+    recon = tf.reshape(recon, [1, *recon.shape[:2]])
+  lidar_img = lidar_to_image(lidar_distances)
+  recon_img = lidar_to_image(recon)
+  video = tf.concat([lidar_img, recon_img], 2)
+  flat_gif_summary(video[0], name=name)
+
 @tfplot.autowrap(figsize=(2, 2))
 def plot_text_on_image(rgb_img: np.ndarray, text: np.ndarray, *, ax, color='red'):
   ax.imshow(rgb_img)

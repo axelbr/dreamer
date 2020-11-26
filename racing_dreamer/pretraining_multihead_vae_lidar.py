@@ -91,6 +91,20 @@ def plot_reconstruction_sample(distance_sample, obstacle_sample, recon_distance,
     plt.title(title)
   plt.show()
 
+def plot_reconstruction_sample(distance_sample, recon_distance, title):
+  angles = tf.linspace(math.pi / 2 - math.radians(270.0 / 2), math.pi / 2 + math.radians(270.0 / 2),
+                       distance_sample.shape[-1])[::-1]
+  for i, distance_scan in enumerate(
+          [distance_sample, recon_distance]):
+    x = distance_scan * np.cos(angles)
+    y = distance_scan * np.sin(angles)
+    plt.subplot(2, 1, i + 1)
+    plt.scatter(x, y)
+    #plt.xlim(-1.1, 1.1)
+    #plt.ylim(-1.1, 1.1)
+    plt.title(title)
+  plt.show()
+
 def preprocess(x, max=5.0):
     x = tf.cast(x, tf.float32)
     sample = x / max
