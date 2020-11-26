@@ -63,10 +63,9 @@ def graph_summary(writer, fn, *args):
 
 @tfplot.autowrap(figsize=(2, 2))
 def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, minv=-1, maxv=+1, color='red'):
-  margin = 0.1
   ax.scatter(x, y, c=color)
-  ax.set_xlim(minv - margin, maxv + margin)
-  ax.set_ylim(minv - margin, maxv + margin)
+  #ax.set_xlim(minv, maxv)
+  #ax.set_ylim(minv, maxv)
 
 def lidar_to_image(scan, minv=-1, maxv=+1, color="k"):
   # shift pi/2 just to align for visualization
@@ -133,8 +132,8 @@ def create_reconstruction_gif(lidar_distances, recon_dist, name="lidar"):
     recon = tf.expand_dims(recon, axis=0)
   else:
     recon = tf.reshape(recon, [1, *recon.shape[:2]])
-  lidar_img = lidar_to_image(lidar_distances)
-  recon_img = lidar_to_image(recon)
+  lidar_img = lidar_to_image(lidar_distances, minv=None, maxv=None)
+  recon_img = lidar_to_image(recon, minv=None, maxv=None)
   video = tf.concat([lidar_img, recon_img], 2)
   flat_gif_summary(video[0], name=name)
 
