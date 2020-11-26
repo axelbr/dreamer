@@ -387,6 +387,18 @@ class Dreamer(tools.Module):
 def count_steps(datadir, config):
   return tools.count_episodes(datadir)[1] * config.action_repeat
 
+def preprocess(obs, config):
+  dtype = prec.global_policy().compute_dtype
+  obs = obs.copy()
+  with tf.device('cpu:0'):
+    obs['image'] = tf.cast(obs['image'], dtype)
+    obs['lidar'] = tf.cast(obs['lidar'], dtype)
+    # normalization is taken into account from the NormalizeObservations wrapper
+    #obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
+    #obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
+    clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
+    obs['reward'] = clip_rewards(obs['reward'])
+  return obs
 
 def load_dataset(directory, config):
   episode = next(tools.load_episodes(directory, 1))
@@ -397,6 +409,7 @@ def load_dataset(directory, config):
       config.dataset_balance, tail_sampling_prob=config.tail_episode_pr)
   dataset = tf.data.Dataset.from_generator(generator, types, shapes)
   dataset = dataset.batch(config.batch_size, drop_remainder=True)
+  dataset = dataset.map(functools.partial(preprocess, config=config))
   dataset = dataset.prefetch(10)
   return dataset
 

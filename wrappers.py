@@ -426,11 +426,13 @@ class NormalizeObservations:
   @property
   def observation_space(self):
     space = {}
-    for obs_type in self._env.observation_space.spaces.keys():
-      if obs_type == self._config.obs_type:
-        low = np.where(self._mask[obs_type], -np.ones_like(self._low[obs_type]), self._low[obs_type])
-        high = np.where(self._mask[obs_type], np.ones_like(self._low[obs_type]), self._high[obs_type])
-        space[obs_type] = gym.spaces.Box(low, high, dtype=np.float32)
+    for obs in self._env.observation_space.spaces.keys():
+      if obs == self._config.obs_type:
+        low = np.where(self._mask[obs], -np.ones_like(self._low[obs]), self._low[obs])
+        high = np.where(self._mask[obs], np.ones_like(self._low[obs]), self._high[obs])
+        space[obs] = gym.spaces.Box(low, high, dtype=np.float32)
+      else:
+        space[obs] = self._env.observation_space.spaces[obs]
     return gym.spaces.Dict(space)
 
   @property
@@ -440,14 +442,10 @@ class NormalizeObservations:
   def step(self, action):
     original_obs, reward, done, info = self._env.step(action)
     obs = original_obs
-    # normalize observations
-    for obs_type in self._env.observation_space.spaces.keys():
-      if obs_type == self._config.obs_type:
-        obs[obs_type] = (original_obs[obs_type] - self._low[obs_type]) / (self._high[obs_type] - self._low[obs_type]) - 0.5
-        obs[obs_type] = np.where(self._mask[obs_type], original_obs[obs_type], obs[obs_type])
-    # clip reward
-    clip_rewards = dict(none=lambda x: x, tanh=np.tanh)[self._config.clip_rewards]
-    reward = clip_rewards(reward)
+    # normalize observations in [-.5, +.5]
+    obs_type = self._config.obs_type
+    obs[obs_type] = (original_obs[obs_type] - self._low[obs_type]) / (self._high[obs_type] - self._low[obs_type]) - 0.5
+    obs[obs_type] = np.where(self._mask[obs_type], original_obs[obs_type], obs[obs_type])
     return obs, reward, done, info
 
 
