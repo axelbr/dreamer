@@ -57,7 +57,6 @@ class SingleForkedRaceCarWrapper:
 
   def reset(self):
     obs = self.env.reset()
-    print(f"Reset, pose: {obs[self._id]['pose'][:3]}")
     if 'low_res_camera' in obs[self._id]:
       obs[self._id]['image'] = obs[self._id]['low_res_camera']
     return obs[self._id]
