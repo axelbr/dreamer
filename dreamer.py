@@ -443,7 +443,7 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     env = wrappers.SingleForkedRaceCarWrapper(name=task + "_" + prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
-    env = wrappers.NormalizeObservations(env)
+    env = wrappers.NormalizeObservations(env, config)
     env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)

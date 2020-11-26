@@ -408,7 +408,8 @@ class NormalizeActions:
     return self._env.step(original)
 
 class NormalizeObservations:
-  def __init__(self, env):
+  def __init__(self, env, config):
+    self._config = config
     self._env = env
     self._mask = {obs_type: np.logical_and(
                                       np.isfinite(env.observation_space[obs_type].low),
@@ -426,9 +427,10 @@ class NormalizeObservations:
   def observation_space(self):
     space = {}
     for obs_type in self._env.observation_space.spaces.keys():
-      low = np.where(self._mask[obs_type], -np.ones_like(self._low[obs_type]), self._low[obs_type])
-      high = np.where(self._mask[obs_type], np.ones_like(self._low[obs_type]), self._high[obs_type])
-      space[obs_type] = gym.spaces.Box(low, high, dtype=np.float32)
+      if obs_type == self._config.obs_type:
+        low = np.where(self._mask[obs_type], -np.ones_like(self._low[obs_type]), self._low[obs_type])
+        high = np.where(self._mask[obs_type], np.ones_like(self._low[obs_type]), self._high[obs_type])
+        space[obs_type] = gym.spaces.Box(low, high, dtype=np.float32)
     return gym.spaces.Dict(space)
 
   @property
@@ -438,9 +440,14 @@ class NormalizeObservations:
   def step(self, action):
     original_obs, reward, done, info = self._env.step(action)
     obs = original_obs
+    # normalize observations
     for obs_type in self._env.observation_space.spaces.keys():
-      obs[obs_type] = (original_obs[obs_type] - self._low[obs_type]) / (self._high[obs_type] - self._low[obs_type]) - 0.5
-      obs[obs_type] = np.where(self._mask[obs_type], original_obs[obs_type], obs[obs_type])
+      if obs_type == self._config.obs_type:
+        obs[obs_type] = (original_obs[obs_type] - self._low[obs_type]) / (self._high[obs_type] - self._low[obs_type]) - 0.5
+        obs[obs_type] = np.where(self._mask[obs_type], original_obs[obs_type], obs[obs_type])
+    # clip reward
+    clip_rewards = dict(none=lambda x: x, tanh=np.tanh)[self._config.clip_rewards]
+    reward = clip_rewards(reward)
     return obs, reward, done, info
 
 
