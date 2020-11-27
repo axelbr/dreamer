@@ -426,7 +426,7 @@ def summarize_episode(episode, config, datadir, writer, prefix):
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
     if prefix == 'test' and config.obs_type in ['image', 'lidar']:
-      obs = {'lidar': preprocess(episode, config)}    # for normalization of lidar
+      obs = preprocess(episode, config)    # for normalization of lidar
       obs['lidar'] = obs['lidar'] + .5
       images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
       lidars = tools.lidar_to_image(obs['lidar'][None])[0].numpy()

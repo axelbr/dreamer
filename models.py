@@ -122,8 +122,8 @@ class MLPLidarEncoder(tools.Module):
     x = self.get('dense1', tfkl.Dense, units=128, activation=self._act)(x)
     x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
     # TODO: try to remove distribution (no VAE, directly autoencoder)
-    x = self.get('dense3', tfkl.Dense, units=tfpl.MultivariateNormalTriL.params_size(self._output_dim))(x)
-    dist = tfpl.MultivariateNormalTriL(self._output_dim, activity_regularizer=tfpl.KLDivergenceRegularizer(self.prior))(
+    x = self.get('dense3', tfkl.Dense, units=tfpl.MultivariateNormalTriL.params_size(self._encoded_dim))(x)
+    dist = tfpl.MultivariateNormalTriL(self._encoded_dim, activity_regularizer=tfpl.KLDivergenceRegularizer(self.prior))(
       x)
     x = dist.sample()
     shape = (*lidar.shape[:-1], *x.shape[1:])
