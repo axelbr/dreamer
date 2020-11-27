@@ -515,36 +515,6 @@ class RewardObs:
     obs['reward'] = 0.0
     return obs
 
-class PolarObs:
-
-  def __init__(self, env):
-    self._env = env
-
-  def __getattr__(self, name):
-    return getattr(self._env, name)
-
-  @property
-  def observation_space(self):
-    spaces = self._env.observation_space.spaces
-    assert 'polar_coords' not in spaces
-    spaces['polar_coords'] = gym.spaces.Box(-np.inf, np.inf, shape=(2,), dtype=np.float32)
-    return gym.spaces.Dict(spaces)
-
-  def _get_sliced_angles(self, n_slices, min_angle=-270.0/2, max_angle=+270.0/2):
-    return np.linspace(min_angle, max_angle, n_slices)
-
-  def step(self, action):
-    obs, reward, done, info = self._env.step(action)
-    angles = self._get_sliced_angles(obs['lidar'].shape[-1])
-    obs['polar_coords'] = np.vstack([obs['lidar'], angles])
-    return obs, reward, done, info
-
-  def reset(self):
-    obs = self._env.reset()
-    angles = self._get_sliced_angles(obs['lidar'].shape[-1])
-    obs['polar_coords'] = np.vstack([obs['lidar'], angles])
-    return obs
-
 class SpeedObs:
 
   def __init__(self, env):

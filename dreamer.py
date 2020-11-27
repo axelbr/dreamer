@@ -154,10 +154,7 @@ class Dreamer(tools.Module):
       action = tf.zeros((len(obs[self._c.obs_type]), self._actdim), self._float)
     else:
       latent, action = state
-    if self._c.obs_type in ['image', 'lidar', 'polar_coords']:
-      embed = self._encode(preprocess(obs, self._c))
-    else:
-      embed = self._encode(obs)
+    embed = self._encode(preprocess(obs, self._c))
     latent, _ = self._dynamics.obs_step(latent, action, embed)
     feat = self._dynamics.get_feat(latent)
     if training:
@@ -250,8 +247,8 @@ class Dreamer(tools.Module):
     elif self._c.obs_type == 'lidar':
       self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
       self._decode = models.MLPLidarDecoder(self._obspace['lidar'].shape)
-    elif self._c.obs_type == 'polar_coords':
-      raise NotImplementedError("polar coordinates not supported yet")
+    else:
+      raise NotImplementedError(f"{self._c.obs_type} not supported yet")
 
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
 
@@ -386,6 +383,8 @@ class Dreamer(tools.Module):
     print(f'[{step}]', ' / '.join(f'{k} {v:.1f}' for k, v in metrics))
     self._writer.flush()
 
+def count_steps(datadir, config):
+  return tools.count_episodes(datadir)[1] * config.action_repeat
 
 def preprocess(obs, config):
   dtype = prec.global_policy().compute_dtype
@@ -393,15 +392,9 @@ def preprocess(obs, config):
   with tf.device('cpu:0'):
     obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
     obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
-    obs['polar_coords'] = (tf.cast(obs['polar_coords'], dtype) - [[0], [270.0/2]]) / [[5.0], [270.0]] - .5
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
     obs['reward'] = clip_rewards(obs['reward'])
   return obs
-
-
-def count_steps(datadir, config):
-  return tools.count_episodes(datadir)[1] * config.action_repeat
-
 
 def load_dataset(directory, config):
   episode = next(tools.load_episodes(directory, 1))
@@ -459,7 +452,6 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     env = wrappers.SingleForkedRaceCarWrapper(name=task + "_" + prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
-    env = wrappers.PolarObs(env)
     env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)

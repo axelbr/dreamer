@@ -104,10 +104,10 @@ class LidarEncoder(tools.Module):
 
 
 class MLPLidarEncoder(tools.Module):
-  def __init__(self, latent_dim, act=tf.nn.relu):
+  def __init__(self, encoded_dim, act=tf.nn.relu):
     self._act = act
-    self._output_dim = latent_dim
-    self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(self._output_dim), scale=1), reinterpreted_batch_ndims=1)
+    self._encoded_dim = encoded_dim
+    self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(self._encoded_dim), scale=1), reinterpreted_batch_ndims=1)
 
   def __call__(self, obs):
     if type(obs) == dict:
@@ -121,6 +121,7 @@ class MLPLidarEncoder(tools.Module):
     x = self.get('flat', tfkl.Flatten)(x)
     x = self.get('dense1', tfkl.Dense, units=128, activation=self._act)(x)
     x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
+    # TODO: try to remove distribution (no VAE, directly autoencoder)
     x = self.get('dense3', tfkl.Dense, units=tfpl.MultivariateNormalTriL.params_size(self._output_dim))(x)
     dist = tfpl.MultivariateNormalTriL(self._output_dim, activity_regularizer=tfpl.KLDivergenceRegularizer(self.prior))(
       x)
@@ -173,10 +174,7 @@ class ConvEncoder(tools.Module):
 
   def __call__(self, obs):
     kwargs = dict(strides=2, activation=self._act)
-    if self._obs_type == 'polar_coords':
-      x = tf.expand_dims(obs[self._obs_type], -1)
-    else:
-      x = obs[self._obs_type]
+    x = obs[self._obs_type]
     x = tf.reshape(x, (-1,) + tuple(x.shape[-3:]))
     x = self.get('h1', tfkl.Conv2D, 1 * self._depth, 4, **kwargs)(x)
     x = self.get('h2', tfkl.Conv2D, 2 * self._depth, 4, **kwargs)(x)
