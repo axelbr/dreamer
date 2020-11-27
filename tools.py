@@ -6,6 +6,7 @@ import pickle
 import re
 import uuid
 import matplotlib.pyplot as plt
+import imageio
 import gym
 import numpy as np
 import tensorflow as tf
@@ -77,7 +78,10 @@ def lidar_to_image(scan, minv=-1, maxv=+1, color="k"):
     for t in range(scan.shape[1]):
       x = scan[b, t, :] * tf.cos(angles)
       y = scan[b, t, :] * tf.sin(angles)
-      data = plot_scatter(x, y, minv=minv, maxv=maxv, color=color[b, t, :])[:, :, :3]    # return RGBA image, then discard "alpha" channel
+      if type(color)==str:
+        data = plot_scatter(x, y, minv=minv, maxv=maxv, color=color)[:, :, :3]    # discard "alpha" channel
+      else:
+        data = plot_scatter(x, y, minv=minv, maxv=maxv, color=color[b, t, :])[:, :, :3]  # discard "alpha" channel
       single_episode.append(data)
     video = tf.stack(single_episode)
     batch_video.append(video)
@@ -99,15 +103,6 @@ def reward_to_image(reward_data):
     batch_video.append(img)
   return tf.stack(batch_video)
 
-import imageio
-from PIL import Image
-def gif_summary(video, fps=30, name="lidar"):
-  frames = []
-  video = tf.concat([video[v, :] for v in range(video.shape[0])], axis=2)
-  for i in range(video.shape[0]):
-    frames.append(video[i].numpy().astype(np.uint8))
-  imageio.mimsave('./{}.gif'.format(name), frames)
-
 def flat_gif_summary(video, fps=25, name="lidar"):
   frames = []
   for i in range(video.shape[0]):
@@ -127,6 +122,19 @@ def create_reconstruction_gif(lidar_distances, lidar_obstacles, recon_dist, obst
   recon_color = np.expand_dims(np.where(obst_detection>=1, 'k', 'grey'), 0)
   lidar_img = lidar_to_image(lidar_distances, color=true_color)
   recon_img = lidar_to_image(recon, color=recon_color)
+  video = tf.concat([lidar_img, recon_img], 2)
+  flat_gif_summary(video[0], name=name)
+
+def create_reconstruction_gif(lidar_distances, recon_dist, name="lidar"):
+  recon = recon_dist.mode()
+  if len(lidar_distances.shape) < 3:
+    lidar_distances = tf.expand_dims(lidar_distances, axis=0)
+  if len(recon.shape) < 3:
+    recon = tf.expand_dims(recon, axis=0)
+  else:
+    recon = tf.reshape(recon, [1, *recon.shape[:2]])
+  lidar_img = lidar_to_image(lidar_distances)
+  recon_img = lidar_to_image(recon)
   video = tf.concat([lidar_img, recon_img], 2)
   flat_gif_summary(video[0], name=name)
 
