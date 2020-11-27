@@ -130,7 +130,7 @@ def main():
         .prefetch(tf.data.experimental.AUTOTUNE)
 
     model_name = "MLP_Lidar30"
-    vae = MLP_CVAE_Dist(input_shape=(lidar_rays, 1))
+    vae = MLP_VAE(input_shape=(lidar_rays, 1))
 
     negloglik = lambda x, rv_x: -rv_x.log_prob(x)
     optimizer = tf.optimizers.Adam(learning_rate=lr)
