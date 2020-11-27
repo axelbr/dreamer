@@ -154,8 +154,7 @@ class Dreamer(tools.Module):
       action = tf.zeros((len(obs[self._c.obs_type]), self._actdim), self._float)
     else:
       latent, action = state
-    # note: no need preprocessing of observation because of the wrapper NormalizeObservations
-    embed = self._encode(obs)
+    embed = self._encode(preprocess(obs, self._c))
     latent, _ = self._dynamics.obs_step(latent, action, embed)
     feat = self._dynamics.get_feat(latent)
     if training:
@@ -391,11 +390,8 @@ def preprocess(obs, config):
   dtype = prec.global_policy().compute_dtype
   obs = obs.copy()
   with tf.device('cpu:0'):
-    obs['image'] = tf.cast(obs['image'], dtype)
-    obs['lidar'] = tf.cast(obs['lidar'], dtype)
-    # normalization is taken into account from the NormalizeObservations wrapper
-    #obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
-    #obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
+    obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
+    obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
     obs['reward'] = clip_rewards(obs['reward'])
   return obs
@@ -408,8 +404,8 @@ def load_dataset(directory, config):
       directory, config.train_steps, config.batch_length,
       config.dataset_balance, tail_sampling_prob=config.tail_episode_pr)
   dataset = tf.data.Dataset.from_generator(generator, types, shapes)
-  dataset = dataset.batch(config.batch_size, drop_remainder=True)
   dataset = dataset.map(functools.partial(preprocess, config=config))
+  dataset = dataset.batch(config.batch_size, drop_remainder=True)
   dataset = dataset.prefetch(10)
   return dataset
 
@@ -430,7 +426,8 @@ def summarize_episode(episode, config, datadir, writer, prefix):
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
     if prefix == 'test' and config.obs_type in ['image', 'lidar']:
-      obs = {'lidar': episode['lidar'] + .5}
+      obs = {'lidar': preprocess(episode, config)}    # for normalization of lidar
+      obs['lidar'] = obs['lidar'] + .5
       images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
       lidars = tools.lidar_to_image(obs['lidar'][None])[0].numpy()
       tools.video_summary(f'sim/{prefix}/video', np.concatenate([images, lidars], axis=2)[None])
@@ -456,7 +453,6 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     env = wrappers.SingleForkedRaceCarWrapper(name=task + "_" + prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.NormalizeActions(env)
-    env = wrappers.NormalizeObservations(env, config)
     env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)
