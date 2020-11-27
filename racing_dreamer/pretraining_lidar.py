@@ -90,10 +90,9 @@ class MLPLidarDecoder(tools.Module):
     mean = x
     return mean
 
-class MLP_CVAE_Dist(tools.Module):
-    def __init__(self, input_shape, *args, **kwargs):
+class MLP_VAE(tools.Module):
+    def __init__(self, input_shape, encoded_size, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        encoded_size = 16
 
         self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(encoded_size), scale=1),
                                      reinterpreted_batch_ndims=1)
@@ -117,6 +116,7 @@ def main():
     batch_size = 128
     lr = 0.001
     lidar_rays = 1080
+    encoded_size = 16
 
     training_data, test_data = load_lidar(lidar_file, train=0.8, shuffle=True)
     training_data = training_data\
@@ -148,10 +148,10 @@ def main():
             for epoch in range(n_epochs):
                 print(f'Epoch {epoch}/{n_epochs}')
                 epoch_loss = 0
-                training_steps += 1
                 b = 0
                 for step, batch in enumerate(iter(training_data)):
                     b += 1
+                    training_steps += 1
                     with tf.GradientTape() as tape:
                         recon_dist = vae(batch)
                         loss = tf.reduce_mean(negloglik(batch, recon_dist))
@@ -160,7 +160,9 @@ def main():
                     optimizer.apply_gradients(zip(gradients, vae.trainable_variables))
                     # log
                     epoch_loss += loss.numpy()
-                    tf.summary.scalar('loss', epoch_loss, step=training_steps * batch_size)
+                    tf.summary.scalar('train_loss', epoch_loss / (step + 1), step=training_steps * batch_size)
+                    if step + 1 % 50 == 0:
+                      print("epoch {}, batch {} => avg loss {:.10f}".format(epoch, step + 1, epoch_loss / (step + 1)))
                     # rendering for debug
                     if step == 0:
                       rnd_id = np.random.randint(0, batch.shape[0])
@@ -168,8 +170,6 @@ def main():
                       recon_distance = recon_dist.mode()[rnd_id, :]
                       text = f'Sample Rendering - Epoch {epoch}'
                       plot_reconstruction_sample(distance_sample, recon_distance, text)
-                    if step + 1 % 50 == 0:
-                      print("epoch {}, batch {} => avg loss {:.10f}".format(epoch, step + 1, epoch_loss / step + 1))
     print("[Info] Training completed in {:.3}s".format(time.time()-init))
 
     vae.encoder.save(f"pretrained_models/pretrained_{model_name}_encoder")
@@ -179,15 +179,16 @@ def main():
     init = time.time()
     test_loss = 0
     b = 0
-    for batch in iter(test_data):
+    for step, batch in enumerate(iter(test_data)):
         b += 1
         recon_dist = vae(batch)
         tools.create_reconstruction_gif(batch, recon_dist, name="{}_{}epochs_{}".format(model_name, n_epochs, b))
         loss = tf.reduce_mean(negloglik(batch, recon_dist))
+        tf.summary.scalar('test_loss', epoch_loss / (step + 1), step=training_steps * batch_size)
         #loss = tf.reduce_mean(tf.losses.mse(tf.expand_dims(batch, -1), recon_dist))
         test_loss += loss.numpy()
         print("test, batch {} => avg loss {:.10f}".format(b, test_loss/b))
-        if b >= 10:
+        if b >= 5:
             break
     print("[Info] Testing completed in {:.3}s".format(time.time()-init))
 
