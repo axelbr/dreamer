@@ -61,7 +61,7 @@ def graph_summary(writer, fn, *args):
       fn(*args)
   return tf.numpy_function(inner, args, [])
 
-@tfplot.autowrap(figsize=(2, 2))
+@tfplot.autowrap(figsize=(6.4, 4.8))
 def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, minv=-1, maxv=+1, color='red'):
   ax.scatter(x, y, c=color)
   ax.set_xlim(minv, maxv)
@@ -228,11 +228,12 @@ def count_episodes(directory):
   return episodes, steps
 
 
-def save_episodes(directory, episodes):
+def save_episodes(directory, episodes_info):
   directory = pathlib.Path(directory).expanduser()
   directory.mkdir(parents=True, exist_ok=True)
   timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
-  for episode in episodes:
+  for episode_info in episodes_info:
+    episode = episode_info['episode']
     identifier = str(uuid.uuid4().hex)
     length = len(episode['reward'])
     filename = directory / f'{timestamp}-{identifier}-{length}.npz'

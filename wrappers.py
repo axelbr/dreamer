@@ -12,7 +12,7 @@ from PIL import Image
 envs = {}
 
 class SingleForkedRaceCarWrapper:
-  def __init__(self, name, id, rendering=False):
+  def __init__(self, name, prefix, id, rendering=False):
     from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv
     from racecar_gym.envs.multi_agent_race import MultiAgentScenario
     from racecar_gym.tasks import Task, register_task
@@ -20,46 +20,57 @@ class SingleForkedRaceCarWrapper:
     if name not in envs.keys():
       register_task("maximize_progress", MaximizeProgressTask)
       register_task("maximize_progress_wt_obstacle", MaximizeProgressMaskObstacleTask)
-      if "prefill" in name:
-        scenario = MultiAgentScenario.from_spec('scenarios/austria_single_prefill_random.yml', rendering=rendering)
-        envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
-      elif "train" in name:
-        scenario = MultiAgentScenario.from_spec('scenarios/austria_single_random.yml', rendering=rendering)
-        envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
+      if prefix=="prefill":
+        env = gym.make(name)
+        envs[name + "_" + prefix] = TimeLimit(env, 500)
+        self._mode = "random"
+      elif prefix=="train":
+        env = gym.make(name)
+        envs[name + "_" + prefix] = TimeLimit(env, 3000)
+        self._mode = "random"
+      elif prefix=="test":
+        env = gym.make(name)
+        envs[name + "_" + prefix] = TimeLimit(env, 3000)
+        self._mode = "grid"
       else:
-        scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria_single_index.yml', rendering=rendering)
-        envs[name] = ForkedMultiAgentRaceEnv(scenario=scenario, mode='grid')
-    self.env = envs[name]
-    self._agent_ids = list(self.env.observation_space.spaces.keys())
+        raise NotImplementedError(f'prefix {prefix} not implemented')
+    self._env = envs[name + "_" + prefix]
+    self._agent_ids = list(self._env.observation_space.spaces.keys())
     self._id = id
 
 
   @property
   def observation_space(self):
-    space = self.env.observation_space[self._id]
+    space = self._env.observation_space[self._id]
     return space
 
   @property
   def action_space(self):
-    action_space = self.env.action_space
+    action_space = self._env.action_space
     return gym.spaces.Box(
       np.append(action_space[self._id]['motor'].low, action_space[self._id]['steering'].low),
       np.append(action_space[self._id]['motor'].high, action_space[self._id]['steering'].high)
     )
 
   def step(self, action):
-    actions = dict([(a, {'motor': (0, 0), 'steering': 0}) for a in self._agent_ids])
-    actions[self._id] = {'motor': (action[0], action[1]), 'steering': action[2]}
-    obs, reward, done, info = self.env.step(actions)
+    actions = dict([(a, {'motor': 0.0, 'steering': 0}) for a in self._agent_ids])
+    actions[self._id] = {'motor': action[0], 'steering': action[1]}
+    obs, reward, done, info = self._env.step(actions)
+    # terminate on collision
+    if info[self._id]['wall_collision'] or len(info[self._id]['opponent_collisions'])>0:
+      done[self._id] = True
     if 'low_res_camera' in obs[self._id]:
       obs[self._id]['image'] = obs[self._id]['low_res_camera']
     return obs[self._id], reward[self._id], done[self._id], info[self._id]
 
   def reset(self):
-    obs = self.env.reset()
+    obs = self._env.reset(mode=self._mode)
     if 'low_res_camera' in obs[self._id]:
       obs[self._id]['image'] = obs[self._id]['low_res_camera']
     return obs[self._id]
+
+  def render(self, **kwargs):
+    return self._env.render(**kwargs)
 
 class SingleRaceCarWrapper:
 
@@ -291,6 +302,8 @@ class Collect:
     self._callbacks = callbacks or ()
     self._precision = precision
     self._episode = None
+    self._episode_camera = None
+    self._rendering_mode = 'follow'
 
   def __getattr__(self, name):
     return getattr(self._env, name)
@@ -303,12 +316,14 @@ class Collect:
     transition['reward'] = reward
     transition['discount'] = info.get('discount', np.array(1 - float(done)))
     self._episode.append(transition)
+    self._episode_camera.append(self._env.render(mode=self._rendering_mode))
     if done:
       episode = {k: [t[k] for t in self._episode] for k in self._episode[0]}
       episode = {k: self._convert(v) for k, v in episode.items()}
       info['episode'] = episode
+      info['episode_camera'] = self._episode_camera
       for callback in self._callbacks:
-        callback(episode)
+        callback(info)
     return obs, reward, done, info
 
   def reset(self):
@@ -318,6 +333,7 @@ class Collect:
     transition['reward'] = 0.0
     transition['discount'] = 1.0
     self._episode = [transition]
+    self._episode_camera = [self._env.render(mode=self._rendering_mode)]
     return obs
 
   def _convert(self, value):
@@ -348,15 +364,15 @@ class TimeLimit:
     obs, reward, done, info = self._env.step(action)
     self._step += 1
     if self._step >= self._duration:
-      done = True
+      done = {id: True for id in self._env.action_space.spaces.keys()}
       if 'discount' not in info:
         info['discount'] = np.array(1.0).astype(np.float32)
       self._step = None
     return obs, reward, done, info
 
-  def reset(self):
+  def reset(self, **kwargs):
     self._step = 0
-    return self._env.reset()
+    return self._env.reset(**kwargs)
 
 
 class ActionRepeat:
@@ -378,6 +394,8 @@ class ActionRepeat:
       current_step += 1
     return obs, total_reward, done, info
 
+  def render(self, **kwargs):
+    return self._env.render(**kwargs)
 
 class NormalizeActions:
 
@@ -579,6 +597,9 @@ class SpeedObs:
     obs = self._env.reset()
     obs['speed'] = 0.0
     return obs
+
+  def render(self, **kwargs):
+    return self._env.render(**kwargs)
 
 
 class Async:

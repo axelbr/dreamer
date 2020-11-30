@@ -390,8 +390,7 @@ def preprocess(obs, config):
   dtype = prec.global_policy().compute_dtype
   obs = obs.copy()
   with tf.device('cpu:0'):
-    obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
-    obs['lidar'] = tf.cast(obs['lidar'], dtype) / 5.0 - 0.5
+    obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
     obs['reward'] = clip_rewards(obs['reward'])
   return obs
@@ -409,8 +408,9 @@ def load_dataset(directory, config):
   dataset = dataset.prefetch(10)
   return dataset
 
-def summarize_episode(episode, config, datadir, writer, prefix):
+def summarize_episode(episode_info, config, datadir, writer, prefix):
   global best_return_so_far
+  episode = episode_info['episode']
   episodes, steps = tools.count_episodes(datadir)
   length = (len(episode['reward']) - 1) * config.action_repeat
   ret = episode['reward'].sum()
@@ -425,17 +425,17 @@ def summarize_episode(episode, config, datadir, writer, prefix):
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
-    if prefix == 'test' and config.obs_type in ['image', 'lidar']:
+    if prefix == 'test':
       obs = preprocess(episode, config)    # for normalization of lidar
       obs['lidar'] = obs['lidar'] + .5
-      images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
+      images = np.array(episode_info['episode_camera'])
       lidars = tools.lidar_to_image(obs['lidar'][None])[0].numpy()
-      tools.video_summary(f'sim/{prefix}/video', np.concatenate([images, lidars], axis=2)[None])
+      tools.video_summary(f'sim/{prefix}/video', np.concatenate([lidars, images], axis=2)[None])
     if config.log_images:
       if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
         best_return_so_far = episode['reward'].sum()
         if step > config.prefill:
-          images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
+          images = np.array(episode_info['episode_camera'])
           tools.video_summary(f'sim/{prefix}/video', images[None])
 
 def make_env(config, writer, prefix, datadir, store, gui=False):
@@ -450,17 +450,16 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
         life_done=True, sticky_actions=True)
     env = wrappers.OneHotAction(env)
   elif suite == 'racecar':
-    env = wrappers.SingleForkedRaceCarWrapper(name=task + "_" + prefix, id='A', rendering=gui)
+    env = wrappers.SingleForkedRaceCarWrapper(name=task, prefix=prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
-    env = wrappers.NormalizeActions(env)
     env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)
   callbacks = []
   if store:
-    callbacks.append(lambda ep: tools.save_episodes(datadir, [ep]))
+    callbacks.append(lambda episode_info: tools.save_episodes(datadir, [episode_info]))
   callbacks.append(
-      lambda ep: summarize_episode(ep, config, datadir, writer, prefix))
+      lambda episode_info: summarize_episode(episode_info, config, datadir, writer, prefix))
   env = wrappers.Collect(env, callbacks, config.precision)
   env = wrappers.RewardObs(env)
   return env
