@@ -53,9 +53,6 @@ class SingleForkedRaceCarWrapper:
     actions = dict([(a, {'motor': 0.0, 'steering': 0}) for a in self._agent_ids])
     actions[self._id] = {'motor': action[0], 'steering': action[1]}
     obs, reward, done, info = self._env.step(actions)
-    # terminate on collision
-    if info[self._id]['wall_collision'] or len(info[self._id]['opponent_collisions'])>0:
-      done[self._id] = True
     if 'low_res_camera' in obs[self._id]:
       obs[self._id]['image'] = obs[self._id]['low_res_camera']
     return obs[self._id], reward[self._id], done[self._id], info[self._id]
