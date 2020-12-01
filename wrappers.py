@@ -11,6 +11,7 @@ from PIL import Image
 
 envs = {}
 
+
 class SingleForkedRaceCarWrapper:
   def __init__(self, name, prefix, id, rendering=False):
     from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv, MultiAgentRaceEnv
@@ -21,12 +22,12 @@ class SingleForkedRaceCarWrapper:
       register_task("maximize_progress", MaximizeProgressTask)
       scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml")
       env = MultiAgentRaceEnv(scenario)
-      if prefix=="prefill":
-        env = TimeLimit(env, 500)     # prefill with many shorter episodes
+      if prefix == "prefill":
+        env = TimeLimit(env, 500)  # prefill with many shorter episodes
         self._mode = "random"
-      elif prefix=="train":
+      elif prefix == "train":
         self._mode = "random"
-      elif prefix=="test":
+      elif prefix == "test":
         self._mode = "grid"
       else:
         raise NotImplementedError(f'prefix {prefix} not implemented')
@@ -34,7 +35,6 @@ class SingleForkedRaceCarWrapper:
     self._env = envs[name + "_" + prefix]
     self._agent_ids = list(self._env.observation_space.spaces.keys())
     self._id = id
-
 
   @property
   def observation_space(self):
@@ -66,6 +66,7 @@ class SingleForkedRaceCarWrapper:
   def render(self, **kwargs):
     return self._env.render(**kwargs)
 
+
 class SingleRaceCarWrapper:
 
   def __init__(self, name, id, size=(100,)):
@@ -76,7 +77,6 @@ class SingleRaceCarWrapper:
     self._agent_ids = list(self.env.observation_space.spaces.keys())
     self._size = size
     self._id = id
-
 
   @property
   def observation_space(self):
@@ -173,9 +173,9 @@ class DeepMindControl:
     spaces = {}
     for key, value in self._env.observation_spec().items():
       spaces[key] = gym.spaces.Box(
-          -np.inf, np.inf, value.shape, dtype=np.float32)
+        -np.inf, np.inf, value.shape, dtype=np.float32)
     spaces['image'] = gym.spaces.Box(
-        0, 255, self._size + (3,), dtype=np.uint8)
+      0, 255, self._size + (3,), dtype=np.uint8)
     return gym.spaces.Dict(spaces)
 
   @property
@@ -205,12 +205,11 @@ class DeepMindControl:
 
 
 class Atari:
-
   LOCK = threading.Lock()
 
   def __init__(
-      self, name, action_repeat=4, size=(84, 84), grayscale=True, noops=30,
-      life_done=False, sticky_actions=True):
+          self, name, action_repeat=4, size=(84, 84), grayscale=True, noops=30,
+          life_done=False, sticky_actions=True):
     import gym
     version = 0 if sticky_actions else 4
     name = ''.join(word.title() for word in name.split('_'))
@@ -283,7 +282,7 @@ class Atari:
     if self._action_repeat > 1:
       np.maximum(self._buffers[0], self._buffers[1], out=self._buffers[0])
     image = np.array(Image.fromarray(self._buffers[0]).resize(
-        self._size, Image.BILINEAR))
+      self._size, Image.BILINEAR))
     image = np.clip(image, 0, 255).astype(np.uint8)
     image = image[:, :, None] if self._grayscale else image
     return {'image': image}
@@ -291,13 +290,14 @@ class Atari:
 
 class Collect:
 
-  def __init__(self, env, callbacks=None, precision=32):
+  def __init__(self, env, callbacks=None, precision=32, prefix="train"):
     self._env = env
     self._callbacks = callbacks or ()
     self._precision = precision
     self._episode = None
     self._episode_camera = None
     self._rendering_mode = 'birds_eye'
+    self._store_images = True if prefix == "test" else False
 
   def __getattr__(self, name):
     return getattr(self._env, name)
@@ -310,12 +310,14 @@ class Collect:
     transition['reward'] = reward
     transition['discount'] = info.get('discount', np.array(1 - float(done)))
     self._episode.append(transition)
-    self._episode_camera.append(self._env.render(mode=self._rendering_mode))
+    if self._store_images:
+      self._episode_camera.append(self._env.render(mode=self._rendering_mode))
     if done:
       episode = {k: [t[k] for t in self._episode] for k in self._episode[0]}
       episode = {k: self._convert(v) for k, v in episode.items()}
       info['episode'] = episode
-      info['episode_camera'] = self._episode_camera
+      if self._store_images:
+        info['episode_camera'] = self._episode_camera
       for callback in self._callbacks:
         callback(info)
     return obs, reward, done, info
@@ -391,13 +393,14 @@ class ActionRepeat:
   def render(self, **kwargs):
     return self._env.render(**kwargs)
 
+
 class NormalizeActions:
 
   def __init__(self, env):
     self._env = env
     self._mask = np.logical_and(
-        np.isfinite(env.action_space.low),
-        np.isfinite(env.action_space.high))
+      np.isfinite(env.action_space.low),
+      np.isfinite(env.action_space.high))
     self._low = np.where(self._mask, env.action_space.low, -1)
     self._high = np.where(self._mask, env.action_space.high, 1)
 
@@ -419,18 +422,19 @@ class NormalizeActions:
     original = np.where(self._mask, original, action)
     return self._env.step(original)
 
+
 class NormalizeObservations:
   def __init__(self, env, config):
     self._config = config
     self._env = env
     self._mask = {obs_type: np.logical_and(
-                                      np.isfinite(env.observation_space[obs_type].low),
-                                      np.isfinite(env.observation_space[obs_type].high)
-                                    ) for obs_type in env.observation_space.spaces.keys()}
+      np.isfinite(env.observation_space[obs_type].low),
+      np.isfinite(env.observation_space[obs_type].high)
+    ) for obs_type in env.observation_space.spaces.keys()}
     self._low = {obs_type: np.where(self._mask, env.observation_space[obs_type].low, -1)
                  for obs_type in env.observation_space.spaces.keys()}
     self._high = {obs_type: np.where(self._mask, env.observation_space[obs_type].high, 1)
-                 for obs_type in env.observation_space.spaces.keys()}
+                  for obs_type in env.observation_space.spaces.keys()}
 
   def __getattr__(self, name):
     return getattr(self._env, name)
@@ -527,7 +531,7 @@ class OneHotAction:
     index = np.argmax(action).astype(int)
     reference = np.zeros_like(action)
     reference[index] = 1
-    #if not np.allclose(reference, action):
+    # if not np.allclose(reference, action):
     #  raise ValueError(f'Invalid one-hot action:\n{action}')
     return self._env.step(index)
 
@@ -567,6 +571,7 @@ class RewardObs:
     obs['reward'] = 0.0
     return obs
 
+
 class SpeedObs:
 
   def __init__(self, env):
@@ -597,7 +602,6 @@ class SpeedObs:
 
 
 class Async:
-
   _ACCESS = 1
   _CALL = 2
   _RESULT = 3

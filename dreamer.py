@@ -431,12 +431,14 @@ def summarize_episode(episode_info, config, datadir, writer, prefix):
       images = np.array(episode_info['episode_camera'])
       lidars = tools.lidar_to_image(obs['lidar'][None])[0].numpy()
       tools.video_summary(f'sim/{prefix}/video', np.concatenate([lidars, images], axis=2)[None])
+    """
     if config.log_images:
       if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
         best_return_so_far = episode['reward'].sum()
         if step > config.prefill:
           images = np.array(episode_info['episode_camera'])
           tools.video_summary(f'sim/{prefix}/video', images[None])
+          """
 
 def make_env(config, writer, prefix, datadir, store, gui=False):
   suite, task = config.task.split('_', 1)
@@ -460,7 +462,7 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
     callbacks.append(lambda episode_info: tools.save_episodes(datadir, [episode_info]))
   callbacks.append(
       lambda episode_info: summarize_episode(episode_info, config, datadir, writer, prefix))
-  env = wrappers.Collect(env, callbacks, config.precision)
+  env = wrappers.Collect(env, callbacks, config.precision, prefix)
   env = wrappers.RewardObs(env)
   return env
 
