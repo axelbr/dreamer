@@ -61,11 +61,12 @@ def graph_summary(writer, fn, *args):
       fn(*args)
   return tf.numpy_function(inner, args, [])
 
-@tfplot.autowrap(figsize=(6.4, 4.8))
+@tfplot.autowrap(figsize=(2, 2))
 def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, minv=-1, maxv=+1, color='red'):
+  margin = .1
   ax.scatter(x, y, c=color)
-  ax.set_xlim(minv, maxv)
-  ax.set_ylim(minv, maxv)
+  ax.set_xlim(minv-margin, maxv+margin)
+  ax.set_ylim(minv-margin, maxv+margin)
 
 def lidar_to_image(scan, minv=-1, maxv=+1, color="k"):
   # shift pi/2 just to align for visualization
@@ -228,12 +229,11 @@ def count_episodes(directory):
   return episodes, steps
 
 
-def save_episodes(directory, episodes_info):
+def save_episodes(directory, episodes):
   directory = pathlib.Path(directory).expanduser()
   directory.mkdir(parents=True, exist_ok=True)
   timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
-  for episode_info in episodes_info:
-    episode = episode_info['episode']
+  for episode in episodes:
     identifier = str(uuid.uuid4().hex)
     length = len(episode['reward'])
     filename = directory / f'{timestamp}-{identifier}-{length}.npz'

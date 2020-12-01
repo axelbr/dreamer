@@ -11,7 +11,6 @@ from PIL import Image
 
 envs = {}
 
-
 class SingleForkedRaceCarWrapper:
   def __init__(self, name, prefix, id, rendering=False):
     from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv, MultiAgentRaceEnv
@@ -21,13 +20,15 @@ class SingleForkedRaceCarWrapper:
     if name not in envs.keys():
       register_task("maximize_progress", MaximizeProgressTask)
       scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml")
-      env = MultiAgentRaceEnv(scenario)
       if prefix == "prefill":
+        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
         env = TimeLimit(env, 500)  # prefill with many shorter episodes
         self._mode = "random"
       elif prefix == "train":
+        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
         self._mode = "random"
       elif prefix == "test":
+        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='grid')
         self._mode = "grid"
       else:
         raise NotImplementedError(f'prefix {prefix} not implemented')
@@ -35,6 +36,7 @@ class SingleForkedRaceCarWrapper:
     self._env = envs[name + "_" + prefix]
     self._agent_ids = list(self._env.observation_space.spaces.keys())
     self._id = id
+
 
   @property
   def observation_space(self):
@@ -58,7 +60,7 @@ class SingleForkedRaceCarWrapper:
     return obs[self._id], reward[self._id], done[self._id], info[self._id]
 
   def reset(self):
-    obs = self._env.reset(mode=self._mode)
+    obs = self._env.reset()
     if 'low_res_camera' in obs[self._id]:
       obs[self._id]['image'] = obs[self._id]['low_res_camera']
     return obs[self._id]
@@ -205,6 +207,7 @@ class DeepMindControl:
 
 
 class Atari:
+
   LOCK = threading.Lock()
 
   def __init__(
@@ -290,14 +293,11 @@ class Atari:
 
 class Collect:
 
-  def __init__(self, env, callbacks=None, precision=32, prefix="train"):
+  def __init__(self, env, callbacks=None, precision=32):
     self._env = env
     self._callbacks = callbacks or ()
     self._precision = precision
     self._episode = None
-    self._episode_camera = None
-    self._rendering_mode = 'birds_eye'
-    self._store_images = True if prefix == "test" else False
 
   def __getattr__(self, name):
     return getattr(self._env, name)
@@ -310,16 +310,12 @@ class Collect:
     transition['reward'] = reward
     transition['discount'] = info.get('discount', np.array(1 - float(done)))
     self._episode.append(transition)
-    if self._store_images:
-      self._episode_camera.append(self._env.render(mode=self._rendering_mode))
     if done:
       episode = {k: [t[k] for t in self._episode] for k in self._episode[0]}
       episode = {k: self._convert(v) for k, v in episode.items()}
       info['episode'] = episode
-      if self._store_images:
-        info['episode_camera'] = self._episode_camera
       for callback in self._callbacks:
-        callback(info)
+        callback(episode)
     return obs, reward, done, info
 
   def reset(self):
@@ -329,7 +325,6 @@ class Collect:
     transition['reward'] = 0.0
     transition['discount'] = 1.0
     self._episode = [transition]
-    self._episode_camera = [self._env.render(mode=self._rendering_mode)]
     return obs
 
   def _convert(self, value):
@@ -368,7 +363,7 @@ class TimeLimit:
 
   def reset(self, **kwargs):
     self._step = 0
-    return self._env.reset(**kwargs)
+    return self._env.reset()
 
 
 class ActionRepeat:
