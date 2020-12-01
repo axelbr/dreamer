@@ -53,6 +53,7 @@ class SingleForkedRaceCarWrapper:
 
   def step(self, action):
     actions = dict([(a, {'motor': 0.0, 'steering': 0}) for a in self._agent_ids])
+    action[0] = -0.5 + (action[0] + 1) / 2       # in order to clip the speed
     actions[self._id] = {'motor': action[0], 'steering': action[1]}
     obs, reward, done, info = self._env.step(actions)
     if 'low_res_camera' in obs[self._id]:
