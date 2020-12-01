@@ -46,7 +46,7 @@ def define_config():
   config.precision = 32
   config.obs_type = 'lidar'
   # Environment.
-  config.task = 'racecar_MultiAgentAustria'
+  config.task = 'racecar_austria'
   config.envs = 1
   config.parallel = 'none'
   config.action_repeat = 4

@@ -13,27 +13,24 @@ envs = {}
 
 class SingleForkedRaceCarWrapper:
   def __init__(self, name, prefix, id, rendering=False):
-    from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv
+    from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv, MultiAgentRaceEnv
     from racecar_gym.envs.multi_agent_race import MultiAgentScenario
     from racecar_gym.tasks import Task, register_task
     from racecar_gym.tasks.progress_based import MaximizeProgressTask, MaximizeProgressMaskObstacleTask
     if name not in envs.keys():
       register_task("maximize_progress", MaximizeProgressTask)
-      register_task("maximize_progress_wt_obstacle", MaximizeProgressMaskObstacleTask)
+      scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml")
+      env = MultiAgentRaceEnv(scenario)
       if prefix=="prefill":
-        env = gym.make(name)
-        envs[name + "_" + prefix] = TimeLimit(env, 500)
+        env = TimeLimit(env, 500)     # prefill with many shorter episodes
         self._mode = "random"
       elif prefix=="train":
-        env = gym.make(name)
-        envs[name + "_" + prefix] = TimeLimit(env, 3000)
         self._mode = "random"
       elif prefix=="test":
-        env = gym.make(name)
-        envs[name + "_" + prefix] = TimeLimit(env, 3000)
         self._mode = "grid"
       else:
         raise NotImplementedError(f'prefix {prefix} not implemented')
+      envs[name + "_" + prefix] = env
     self._env = envs[name + "_" + prefix]
     self._agent_ids = list(self._env.observation_space.spaces.keys())
     self._id = id
@@ -303,7 +300,7 @@ class Collect:
     self._precision = precision
     self._episode = None
     self._episode_camera = None
-    self._rendering_mode = 'follow'
+    self._rendering_mode = 'birds_eye'
 
   def __getattr__(self, name):
     return getattr(self._env, name)

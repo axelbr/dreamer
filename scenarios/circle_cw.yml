@@ -1,5 +1,5 @@
 world:
-  name: austria
+  name: circle_cw
 agents:
   - id: A
     vehicle:
