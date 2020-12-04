@@ -19,7 +19,7 @@ class SingleForkedRaceCarWrapper:
     from racecar_gym.tasks.progress_based import MaximizeProgressTask, MaximizeProgressMaskObstacleTask
     if name not in envs.keys():
       register_task("maximize_progress", MaximizeProgressTask)
-      scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml")
+      scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml", rendering=rendering)
       if prefix == "prefill":
         env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
         env = TimeLimit(env, 500)  # prefill with many shorter episodes
