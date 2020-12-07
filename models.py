@@ -107,7 +107,6 @@ class MLPLidarEncoder(tools.Module):
   def __init__(self, encoded_dim, act=tf.nn.relu):
     self._act = act
     self._encoded_dim = encoded_dim
-    self.prior = tfd.Independent(tfd.Normal(loc=tf.zeros(self._encoded_dim), scale=1), reinterpreted_batch_ndims=1)
 
   def __call__(self, obs):
     if type(obs) == dict:
@@ -127,14 +126,15 @@ class MLPLidarEncoder(tools.Module):
 
 
 class MLPLidarDecoder(tools.Module):
-  def __init__(self, shape, act=tf.nn.relu):
+  def __init__(self, shape, encoded_dim, act=tf.nn.relu):
     self._act = act
+    self._encoded_dim = encoded_dim
     self._shape = shape
 
   def __call__(self, features):
     # note: features = tf.concat([state['stoch'], state['deter']], -1)])
     x = tf.reshape(features, shape=(-1, *features.shape[2:]))
-    x = self.get('dense1', tfkl.Dense, features.shape[2], activation=self._act)(x)
+    x = self.get('dense1', tfkl.Dense, self._encoded_dim, activation=self._act)(x)
     x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
     x = self.get('dense3', tfkl.Dense, units=128, activation=self._act)(x)
     # x = self.get('dense3', tfkl.Dense, units=self._shape[0], activation=self._act)(x)

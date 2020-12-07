@@ -64,7 +64,7 @@ def graph_summary(writer, fn, *args):
 @tfplot.autowrap(figsize=(2, 2))
 def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, minv=-1, maxv=+1, color='red'):
   margin = .1
-  ax.scatter(x, y, c=color)
+  ax.scatter(x, y, s=5, c=color)
   ax.set_xlim(minv-margin, maxv+margin)
   ax.set_ylim(minv-margin, maxv+margin)
 

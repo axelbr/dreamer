@@ -246,7 +246,7 @@ class Dreamer(tools.Module):
       self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
     elif self._c.obs_type == 'lidar':
       self._encode = models.MLPLidarEncoder(self._c.encoded_obs_dim, cnn_act)
-      self._decode = models.MLPLidarDecoder(self._obspace['lidar'].shape)
+      self._decode = models.MLPLidarDecoder(self._obspace['lidar'].shape, self._c.encoded_obs_dim)
     elif self._c.obs_type == 'polar_coords':
       raise NotImplementedError("polar coordinates not supported yet")
 
