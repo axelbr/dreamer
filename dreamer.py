@@ -148,12 +148,6 @@ class Dreamer(tools.Module):
     return action, state
 
   @tf.function
-  def _clip_action(self, action):
-    clip_value_min = [[-0.5, -1]]
-    clip_value_max = [[+0.5, +1]]
-    return tf.clip_by_value(action, clip_value_min, clip_value_max)
-
-  @tf.function
   def policy(self, obs, state, training):
     if state is None:
       latent = self._dynamics.initial(len(obs[self._c.obs_type]))
@@ -168,7 +162,6 @@ class Dreamer(tools.Module):
     else:
       action = self._actor(feat).mode()
     action = self._exploration(action, training)
-    action = self._clip_action(action)
     state = (latent, action)
     return action, state
 
@@ -459,6 +452,7 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
   elif suite == 'racecar':
     env = wrappers.SingleForkedRaceCarWrapper(name=task, prefix=prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
+    env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[0.1, 1.0])
     env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)
