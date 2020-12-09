@@ -55,6 +55,8 @@ def define_config():
   config.prefill = 5000
   config.eval_noise = 0.0
   config.clip_rewards = 'none'
+  config.clip_rewards_min = 1
+  config.clip_rewards_max = -1
   # Model.
   config.encoded_obs_dim = 16
   config.deter_size = 200
@@ -392,7 +394,8 @@ def preprocess(obs, config):
   with tf.device('cpu:0'):
     obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
     obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
-    clip_rewards = dict(none=lambda x: x, tanh=tf.tanh)[config.clip_rewards]
+    clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
+                        clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[config.clip_rewards]
     obs['reward'] = clip_rewards(obs['reward'])
   return obs
 
