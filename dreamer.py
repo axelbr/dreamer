@@ -30,7 +30,7 @@ import tools
 import wrappers
 from datetime import datetime
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
@@ -55,8 +55,8 @@ def define_config():
   config.prefill = 5000
   config.eval_noise = 0.0
   config.clip_rewards = 'none'
-  config.clip_rewards_min = 1
-  config.clip_rewards_max = -1
+  config.clip_rewards_min = -1
+  config.clip_rewards_max = 1
   # Model.
   config.encoded_obs_dim = 16
   config.deter_size = 200
