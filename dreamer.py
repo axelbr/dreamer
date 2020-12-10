@@ -455,7 +455,7 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
   elif suite == 'racecar':
     env = wrappers.SingleForkedRaceCarWrapper(name=task, prefix=prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
-    env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[0.1, 1.0])
+    env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
     env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)
