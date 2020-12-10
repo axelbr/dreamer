@@ -69,6 +69,9 @@ class SingleForkedRaceCarWrapper:
   def render(self, **kwargs):
     return self._env.render(**kwargs)
 
+  def close(self):
+    self._env.close()
+
 
 class SingleRaceCarWrapper:
 
