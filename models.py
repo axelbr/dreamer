@@ -124,6 +124,18 @@ class MLPLidarEncoder(tools.Module):
     shape = (*lidar.shape[:-1], *x.shape[1:])
     return tf.reshape(x, shape=shape)
 
+class IdentityEncoder(tools.Module):
+  # note: this is just to see what happens without reducing the observation
+  def __init__(self):
+    pass
+
+  def __call__(self, obs):
+    if type(obs) == dict:
+      lidar = obs['lidar']
+    else:
+      lidar = obs
+    return lidar
+
 
 class MLPLidarDecoder(tools.Module):
   def __init__(self, shape, encoded_dim, act=tf.nn.relu):
