@@ -138,17 +138,17 @@ class IdentityEncoder(tools.Module):
 
 
 class MLPLidarDecoder(tools.Module):
-  def __init__(self, shape, encoded_dim, act=tf.nn.relu):
+  def __init__(self, depth, shape, encoded_dim, act=tf.nn.relu):
     self._act = act
     self._encoded_dim = encoded_dim
     self._shape = shape
+    self._depth = depth
 
   def __call__(self, features):
     # note: features = tf.concat([state['stoch'], state['deter']], -1)])
     x = tf.reshape(features, shape=(-1, *features.shape[2:]))
-    x = self.get('dense1', tfkl.Dense, self._encoded_dim, activation=self._act)(x)
-    x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
-    x = self.get('dense3', tfkl.Dense, units=128, activation=self._act)(x)
+    x = self.get('dense1', tfkl.Dense, units=2*self._depth, activation=self._act)(x)
+    x = self.get('dense2', tfkl.Dense, units=4*self._depth, activation=self._act)(x)
     # x = self.get('dense3', tfkl.Dense, units=self._shape[0], activation=self._act)(x)
     # return tfd.Independent(tfd.Normal(x, 1), len(self._shape))
     params = tfpl.IndependentNormal.params_size(self._shape[0])
