@@ -23,7 +23,7 @@ class SingleForkedRaceCarWrapper:
       scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml", rendering=rendering)
       if prefix == "prefill":
         env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
-        env = TimeLimit(env, 500)  # prefill with many shorter episodes
+        env = TimeLimit(env, 1000)  # prefill with many shorter episodes
         self._mode = "random"
       elif prefix == "train":
         env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
