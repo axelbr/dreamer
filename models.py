@@ -104,8 +104,9 @@ class LidarEncoder(tools.Module):
 
 
 class MLPLidarEncoder(tools.Module):
-  def __init__(self, encoded_dim, act=tf.nn.relu):
+  def __init__(self, encoded_dim, depth, act=tf.nn.relu):
     self._act = act
+    self._depth = depth
     self._encoded_dim = encoded_dim
 
   def __call__(self, obs):
@@ -118,8 +119,8 @@ class MLPLidarEncoder(tools.Module):
     else:
       x = lidar
     x = self.get('flat', tfkl.Flatten)(x)
-    x = self.get('dense1', tfkl.Dense, units=128, activation=self._act)(x)
-    x = self.get('dense2', tfkl.Dense, units=64, activation=self._act)(x)
+    x = self.get('dense1', tfkl.Dense, units=4*self._depth, activation=self._act)(x)
+    x = self.get('dense2', tfkl.Dense, units=2*self._depth, activation=self._act)(x)
     x = self.get('dense3', tfkl.Dense, units=self._encoded_dim)(x)
     shape = (*lidar.shape[:-1], *x.shape[1:])
     return tf.reshape(x, shape=shape)
@@ -148,7 +149,8 @@ class MLPLidarDecoder(tools.Module):
     # note: features = tf.concat([state['stoch'], state['deter']], -1)])
     x = tf.reshape(features, shape=(-1, *features.shape[2:]))
     x = self.get('dense1', tfkl.Dense, units=2*self._depth, activation=self._act)(x)
-    x = self.get('dense2', tfkl.Dense, units=4*self._depth, activation=self._act)(x)
+    x = self.get('dense2', tfkl.Dense, units=2*self._depth, activation=self._act)(x)
+    x = self.get('dense3', tfkl.Dense, units=4*self._depth, activation=self._act)(x)
     # x = self.get('dense3', tfkl.Dense, units=self._shape[0], activation=self._act)(x)
     # return tfd.Independent(tfd.Normal(x, 1), len(self._shape))
     params = tfpl.IndependentNormal.params_size(self._shape[0])
