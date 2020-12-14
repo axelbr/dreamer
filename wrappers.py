@@ -22,11 +22,11 @@ class SingleForkedRaceCarWrapper:
       register_task("maximize_progress_obstacle", MaximizeProgressMaskObstacleTask)
       scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml", rendering=rendering)
       if prefix == "prefill":
-        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='biased_random')
+        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
         env = TimeLimit(env, 1000)  # prefill with many shorter episodes
         self._mode = "random"
       elif prefix == "train":
-        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='biased_random')
+        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
         self._mode = "random"
       elif prefix == "test":
         env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='grid')
