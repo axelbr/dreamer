@@ -139,9 +139,8 @@ class IdentityEncoder(tools.Module):
 
 
 class MLPLidarDecoder(tools.Module):
-  def __init__(self, depth, shape, encoded_dim, act=tf.nn.relu):
+  def __init__(self, depth, shape, act=tf.nn.relu):
     self._act = act
-    self._encoded_dim = encoded_dim
     self._shape = shape
     self._depth = depth
 
