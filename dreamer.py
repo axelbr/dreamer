@@ -72,10 +72,6 @@ def define_config():
   config.pcont_scale = 10.0
   config.weight_decay = 0.0
   config.weight_decay_pattern = r'.*'
-  # Pretrained model
-  config.use_pretrained_encoder = False
-  config.check_load_pretrained_encoder = tools.Once() if config.use_pretrained_encoder else lambda : False
-  config.pretrained_encoder_path = "racing_dreamer/pretrained_models/pretrained_encoder"
   # Training.
   config.batch_size = 50
   config.batch_length = 30
@@ -178,9 +174,6 @@ class Dreamer(tools.Module):
   def _train(self, data, log_images):
     with tf.GradientTape() as model_tape:
       embed = self._encode(data)
-      if self._c.check_load_pretrained_encoder():   # since eager execution, the first call builds the model
-        self._encode.load(self._c.pretrained_encoder_path)
-        embed = self._encode(data)
       post, prior = self._dynamics.observe(embed, data['action'])
       feat = self._dynamics.get_feat(post)
       image_pred = self._decode(feat)
