@@ -115,7 +115,7 @@ def train(loss, model, optimizer, original):
 
 # load data
 output_dir = os.path.join("offline_autoencoder_tuning", "out")
-dataset_filename = "dataset_random_starts_austria_2000episodes_1000maxobs.h5"
+dataset_filename = "dataset_single_agent_austria_random_starts_austria_2000episodes_500steps.h5"
 data = h5.File(os.path.join(output_dir, dataset_filename), "r")
 # prepare dataset
 all_obs = np.vstack([np.array(data[episode]['obs']['lidar']) for episode in list(data.keys())[:10]])
