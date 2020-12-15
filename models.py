@@ -151,7 +151,8 @@ class MLPLidarDecoder(tools.Module):
     x = self.get('dense1', tfkl.Dense, units=2*self._depth, activation="linear")(x)
     x = self.get('dense2', tfkl.Dense, units=2*self._depth, activation=self._act)(x)
     x = self.get('dense3', tfkl.Dense, units=4*self._depth, activation=self._act)(x)
-    mean = self.get('dense4', tfkl.Dense, units=self._shape[0], activation=self._act)(x)
+    x = self.get('dense4', tfkl.Dense, units=self._shape[0], activation=self._act)(x)
+    mean = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
     return tfd.Independent(tfd.Normal(mean, 1), len(self._shape))
 
 
