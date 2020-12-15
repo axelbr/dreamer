@@ -58,14 +58,14 @@ def define_config():
   config.clip_rewards_min = -1
   config.clip_rewards_max = 1
   # Model.
-  config.encoded_obs_dim = 16
+  config.encoded_obs_dim = 1080
   config.deter_size = 200
   config.stoch_size = 30
   config.num_units = 400
   config.reward_out_dist = 'normal'
   config.dense_act = 'elu'
   config.cnn_act = 'relu'
-  config.cnn_depth = 32
+  config.cnn_depth = 128
   config.pcont = True
   config.free_nats = 3.0
   config.kl_scale = 1.0
@@ -78,7 +78,7 @@ def define_config():
   config.pretrained_encoder_path = "racing_dreamer/pretrained_models/pretrained_encoder"
   # Training.
   config.batch_size = 50
-  config.batch_length = 50
+  config.batch_length = 30
   config.train_every = 1000
   config.train_steps = 100
   config.pretrain = 100
