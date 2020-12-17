@@ -483,7 +483,7 @@ def main(config):
   writer = tf.summary.create_file_writer(
       str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
-  prefill_envs = [make_env(config, writer, 'prefill', datadir, store=True, gui=False)]
+
   train_envs = [make_env(config, writer, 'train', datadir, store=True, gui=False)]
   test_envs = [make_env(config, writer, 'test', datadir, store=False, gui=False)]
 
@@ -497,11 +497,11 @@ def main(config):
 
   if config.prefill_agent=='random':
     random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
-    tools.simulate(random_agent, prefill_envs, prefill / config.action_repeat)
+    tools.simulate(random_agent, train_envs, prefill / config.action_repeat)
   elif config.prefill_agent=='gap_follower':
     gapfollower = wrappers.GapFollowerWrapper(train_envs[0]._env._env.original_action_space)
     gap_follower_agent = lambda o, d, _: ([gapfollower.action(o) for _ in d], None)
-    tools.simulate(gap_follower_agent, prefill_envs, prefill / config.action_repeat)
+    tools.simulate(gap_follower_agent, train_envs, prefill / config.action_repeat)
   else:
     raise NotImplementedError(f'prefill agent {config.prefill_agent} not implemented')
   writer.flush()
