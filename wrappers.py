@@ -19,18 +19,14 @@ class SingleForkedRaceCarWrapper:
     from racecar_gym.tasks.progress_based import MaximizeProgressTask, MaximizeProgressMaskObstacleTask
     if name not in envs.keys():
       register_task("maximize_progress", MaximizeProgressTask)
-      register_task("maximize_progress_obstacle", MaximizeProgressMaskObstacleTask)
       scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml", rendering=rendering)
       if prefix == "prefill":
         env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
         env = TimeLimit(env, 1000)  # prefill with many shorter episodes
-        self._mode = "random"
       elif prefix == "train":
         env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
-        self._mode = "random"
       elif prefix == "test":
         env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='grid')
-        self._mode = "grid"
       else:
         raise NotImplementedError(f'prefix {prefix} not implemented')
       envs[name + "_" + prefix] = env
@@ -433,6 +429,10 @@ class ReduceActionSpace:
 
   def __getattr__(self, name):
     return getattr(self._env, name)
+
+  @property
+  def action_space(self):
+    return gym.spaces.Box(self._low, self._high, dtype=np.float32)
 
   def step(self, action):
     original = (action + 1) / 2 * (self._high - self._low) + self._low

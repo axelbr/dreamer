@@ -147,7 +147,7 @@ class MLPLidarDecoder(tools.Module):
   def __call__(self, features):
     # note: features = tf.concat([state['stoch'], state['deter']], -1)])
     x = tf.reshape(features, shape=(-1, *features.shape[2:]))
-    x = self.get('dense1', tfkl.Dense, units=2*self._depth, activation="linear")(x)
+    x = self.get('dense1', tfkl.Dense, units=2*self._depth, activation=None)(x)
     x = self.get('dense2', tfkl.Dense, units=4*self._depth, activation=self._act)(x)
     params = tfpl.IndependentNormal.params_size(self._shape[0])
     x = self.get('params', tfkl.Dense, units=params, activation=tf.nn.leaky_relu)(x)

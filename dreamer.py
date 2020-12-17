@@ -499,7 +499,7 @@ def main(config):
     random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
     tools.simulate(random_agent, train_envs, prefill / config.action_repeat)
   elif config.prefill_agent=='gap_follower':
-    gapfollower = wrappers.GapFollowerWrapper(train_envs[0]._env._env.original_action_space)
+    gapfollower = GapFollower()
     gap_follower_agent = lambda o, d, _: ([gapfollower.action(o) for _ in d], None)
     tools.simulate(gap_follower_agent, train_envs, prefill / config.action_repeat)
   else:
