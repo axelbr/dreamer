@@ -103,7 +103,7 @@ def reward_to_image(reward_data):
     batch_video.append(img)
   return tf.stack(batch_video)
 
-def flat_gif_summary(video, fps=25, name="lidar"):
+def flat_gif_summary(video, fps=10, name="lidar"):
   frames = []
   for i in range(video.shape[0]):
     frames.append(video[i].numpy().astype(np.uint8))
@@ -151,7 +151,7 @@ def overimpose_speed_on_frames(images, speeds):
     frames.append(frame)
   return np.stack(frames)
 
-def video_summary(name, video, step=None, fps=25):
+def video_summary(name, video, step=None, fps=10):
   name = name if isinstance(name, str) else name.decode('utf-8')
   if np.issubdtype(video.dtype, np.floating):
     video = np.clip(255 * video, 0, 255).astype(np.uint8)
