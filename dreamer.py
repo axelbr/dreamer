@@ -404,9 +404,10 @@ def load_dataset(directory, config):
 def summarize_episode(episode, config, datadir, writer, prefix):
   global best_return_so_far
   episodes, steps = tools.count_episodes(datadir)
-  length = (len(episode['reward']) - 1) * config.action_repeat
+  episode_len = len(episode['reward']) - 1
+  length = episode_len * config.action_repeat
   ret = episode['reward'].sum()
-  print(f'{prefix.title()} episode of length {length} with return {ret:.1f}.')
+  print(f'{prefix.title()} episode of length {episode_len} ({length} sim steps) with return {ret:.1f}.')
   metrics = [
       (f'{prefix}/return', float(episode['reward'].sum())),
       (f'{prefix}/length', len(episode['reward']) - 1),
@@ -493,7 +494,7 @@ def main(config):
   # Prefill dataset with random episodes.
   step = count_steps(datadir, config)
   prefill = max(0, config.prefill - step)
-  print(f'Prefill dataset with {prefill} steps.')
+  print(f'Prefill dataset ({config.prefill_agent}) with {prefill} steps.')
 
   if config.prefill_agent=='random':
     random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)

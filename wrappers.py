@@ -430,10 +430,6 @@ class ReduceActionSpace:
   def __getattr__(self, name):
     return getattr(self._env, name)
 
-  @property
-  def action_space(self):
-    return gym.spaces.Box(self._low, self._high, dtype=np.float32)
-
   def step(self, action):
     original = (action + 1) / 2 * (self._high - self._low) + self._low
     original = np.where(self._mask, original, action)
