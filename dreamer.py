@@ -347,7 +347,7 @@ class Dreamer(tools.Module):
       error = model_img - truth_img
       openl = tf.concat([truth_img, model_img, error], 2)
     tools.graph_summary(self._writer, tools.video_summary,
-                        'agent/train/autoencoder', openl, self._step)
+                        'agent/train/autoencoder', openl, self._step, int(100/self._c.action_repeat))
 
   def _reward_summaries(self, data, reward_pred):
     summary_size = 6  # nr images to be shown
@@ -357,7 +357,7 @@ class Dreamer(tools.Module):
     video_image = tf.concat([truth, model, error], 1)  # note: no T dimension, then stack over dim 1
     video_image = tf.expand_dims(video_image, axis=1)  # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
     tools.graph_summary(self._writer, tools.video_summary,
-                        'agent/train/reward', video_image, self._step)
+                        'agent/train/reward', video_image, self._step, int(100/self._c.action_repeat))
 
   def _write_summaries(self):
     step = int(self._step.numpy())
@@ -423,13 +423,14 @@ def summarize_episode(episode, config, datadir, writer, prefix):
       obs['lidar'] = obs['lidar'] + .5
       images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
       lidars = tools.lidar_to_image(obs['lidar'][None])[0].numpy()
-      tools.video_summary(f'sim/{prefix}/video', np.concatenate([images, lidars], axis=2)[None])
+      tools.video_summary(f'sim/{prefix}/video', np.concatenate([images, lidars], axis=2)[None],
+                          fps=int(100/config.action_repeat))
     if config.log_images:
       if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
         best_return_so_far = episode['reward'].sum()
         if step > config.prefill:
           images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
-          tools.video_summary(f'sim/{prefix}/video', images[None])
+          tools.video_summary(f'sim/{prefix}/video', images[None], fps=int(100/config.action_repeat))
 
 def make_env(config, writer, prefix, datadir, store, gui=False):
   suite, task = config.task.split('_', 1)

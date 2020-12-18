@@ -151,7 +151,7 @@ def overimpose_speed_on_frames(images, speeds):
     frames.append(frame)
   return np.stack(frames)
 
-def video_summary(name, video, step=None, fps=10):
+def video_summary(name, video, step=None, fps=100):
   name = name if isinstance(name, str) else name.decode('utf-8')
   if np.issubdtype(video.dtype, np.floating):
     video = np.clip(255 * video, 0, 255).astype(np.uint8)
@@ -187,7 +187,7 @@ def encode_gif(frames, fps):
   return out
 
 
-def simulate(agent, envs, steps=0, episodes=0, state=None, training=True):
+def simulate(agent, envs, steps=0, episodes=0, state=None):
   # Initialize or unpack simulation state.
   if state is None:
     step, episode = 0, 0
