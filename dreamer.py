@@ -50,7 +50,7 @@ def define_config():
   config.envs = 1
   config.parallel = 'none'
   config.action_repeat = 4
-  config.time_limit = 3000
+  config.time_limit = 30000
   config.prefill_agent = 'random'
   config.prefill = 5000
   config.eval_noise = 0.0
