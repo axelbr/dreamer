@@ -194,6 +194,7 @@ def simulate(agent, envs, steps=0, episodes=0, state=None):
     done = np.ones(len(envs), np.bool)
     length = np.zeros(len(envs), np.int32)
     obs = [None] * len(envs)
+    cum_reward = [0.0] * len(envs)
     agent_state = None
   else:
     step, episode, done, length, obs, agent_state = state
@@ -204,6 +205,7 @@ def simulate(agent, envs, steps=0, episodes=0, state=None):
       obss = [envs[i].reset() for i in indices]
       for index, o in zip(indices, obss):
         obs[index] = o
+        cum_reward[index] = 0.0
     # Step agents.
     obs = {k: np.stack([o[k] for o in obs]) for k in obs[0]}
     action, agent_state = agent(obs, done, agent_state)
@@ -213,13 +215,14 @@ def simulate(agent, envs, steps=0, episodes=0, state=None):
     obss = [e.step(a) for e, a in zip(envs, action)]
     obs, _, done = zip(*[p[:3] for p in obss])
     obs = list(obs)
+    cum_reward = [cum_reward[index] + obs[index]['reward'] for index in range(len(envs))]
     done = np.stack(done)
     episode += int(done.sum())
     length += 1
     step += (done * length).sum()
     length *= (1 - done)
   # Return new state to allow resuming the simulation.
-  return (step - steps, episode - episodes, done, length, obs, agent_state)
+  return (step - steps, episode - episodes, done, length, obs, agent_state), cum_reward
 
 
 def count_episodes(directory):
