@@ -531,6 +531,7 @@ def main(config):
       checkpoint_dir.mkdir(parents=True, exist_ok=True)
       for model in [agent._encode, agent._dynamics, agent._decode, agent._reward, agent._actor]:
         model.save(checkpoint_dir / f'{model._name}.pkl')
+      agent.save(checkpoint_dir / 'variables.pkl')    # store also the whole model
     # training step
     print('Start collection.')
     steps = config.eval_every // config.action_repeat
