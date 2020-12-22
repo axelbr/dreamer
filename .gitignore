@@ -4,6 +4,7 @@ __pycache__/
 ./dist
 ./logdir
 ./logs
+./export_log
 venv
 .idea
 *gif
