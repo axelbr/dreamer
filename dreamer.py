@@ -444,12 +444,13 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
         life_done=True, sticky_actions=True)
     env = wrappers.OneHotAction(env)
   elif suite == 'racecar':
-    env = wrappers.SingleForkedRaceCarWrapper(name=task, prefix=prefix, id='A', rendering=gui)
+    env = wrappers.SingleRaceCarWrapper(name=task, prefix=prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
     env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)
+  env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
   callbacks = []
   if store:
     callbacks.append(lambda ep: tools.save_episodes(datadir, [ep]))

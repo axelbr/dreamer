@@ -11,26 +11,17 @@ from PIL import Image
 
 envs = {}
 
-class SingleForkedRaceCarWrapper:
+class SingleRaceCarWrapper:
   def __init__(self, name, prefix, id, rendering=False):
-    from racecar_gym.envs.forked_multi_agent_race import ForkedMultiAgentRaceEnv, MultiAgentRaceEnv
-    from racecar_gym.envs.multi_agent_race import MultiAgentScenario
-    from racecar_gym.tasks import Task, register_task
-    from racecar_gym.tasks.progress_based import MaximizeProgressTask, MaximizeProgressMaskObstacleTask
+    from racecar_gym.envs.multi_agent_race import MultiAgentScenario, MultiAgentRaceEnv
+    from racecar_gym.tasks import register_task
+    from racecar_gym.tasks.progress_based import MaximizeProgressTask
     if name not in envs.keys():
       register_task("maximize_progress", MaximizeProgressTask)
       scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml", rendering=rendering)
-      if prefix == "prefill":
-        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
-        env = TimeLimit(env, 1000)  # prefill with many shorter episodes
-      elif prefix == "train":
-        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='random')
-      elif prefix == "test":
-        env = ForkedMultiAgentRaceEnv(scenario=scenario, mode='grid')
-      else:
-        raise NotImplementedError(f'prefix {prefix} not implemented')
-      envs[name + "_" + prefix] = env
-    self._env = envs[name + "_" + prefix]
+      envs[name] = MultiAgentRaceEnv(scenario=scenario)
+    self._mode = "grid" if prefix=="test" else "random"
+    self._env = envs[name]
     self._agent_ids = list(self._env.observation_space.spaces.keys())
     self._id = id
 
@@ -57,7 +48,7 @@ class SingleForkedRaceCarWrapper:
     return obs[self._id], reward[self._id], done[self._id], info[self._id]
 
   def reset(self):
-    obs = self._env.reset()
+    obs = self._env.reset(mode=self._mode)
     if 'low_res_camera' in obs[self._id]:
       obs[self._id]['image'] = obs[self._id]['low_res_camera']
     return obs[self._id]
@@ -67,46 +58,6 @@ class SingleForkedRaceCarWrapper:
 
   def close(self):
     self._env.close()
-
-
-class SingleRaceCarWrapper:
-
-  def __init__(self, name, id, size=(100,)):
-    if name not in envs.keys():
-      scenario = racecar_gym.MultiAgentScenario.from_spec('scenarios/austria.yml', rendering=False)
-      envs[name] = racecar_gym.MultiAgentRaceEnv(scenario=scenario)
-    self.env = envs[name]
-    self._agent_ids = list(self.env.observation_space.spaces.keys())
-    self._size = size
-    self._id = id
-
-  @property
-  def observation_space(self):
-    space = self.env.observation_space[self._id]
-    return space
-
-  @property
-  def action_space(self):
-    action_space = self.env.action_space
-    return gym.spaces.Box(
-      np.append(action_space[self._id]['motor'].low, action_space[self._id]['steering'].low),
-      np.append(action_space[self._id]['motor'].high, action_space[self._id]['steering'].high)
-    )
-
-  def step(self, action):
-    actions = dict([(a, {'motor': (0, 0), 'steering': 0}) for a in self._agent_ids])
-    actions[self._id] = {'motor': (action[0], action[1]), 'steering': action[2]}
-    obs, reward, done, info = self.env.step(actions)
-    if 'low_res_camera' in obs[self._id]:
-      obs[self._id]['image'] = obs[self._id]['low_res_camera']
-    return obs[self._id], reward[self._id], done[self._id], info[self._id]
-
-  def reset(self):
-    obs = self.env.reset()
-    if 'low_res_camera' in obs[self._id]:
-      obs[self._id]['image'] = obs[self._id]['low_res_camera']
-    return obs[self._id]
-
 
 class ProcgenWrapper(gym.Wrapper):
 
@@ -355,7 +306,7 @@ class TimeLimit:
     obs, reward, done, info = self._env.step(action)
     self._step += 1
     if self._step >= self._duration:
-      done = {id: True for id in self._env.action_space.spaces.keys()}
+      done = True
       if 'discount' not in info:
         info['discount'] = np.array(1.0).astype(np.float32)
       self._step = None
@@ -363,7 +314,7 @@ class TimeLimit:
 
   def reset(self, **kwargs):
     self._step = 0
-    return self._env.reset()
+    return self._env.reset(**kwargs)
 
 
 class ActionRepeat:
@@ -605,8 +556,8 @@ class SpeedObs:
     obs['speed'] = np.linalg.norm(info['velocity'])
     return obs, reward, done, info
 
-  def reset(self):
-    obs = self._env.reset()
+  def reset(self, **kwargs):
+    obs = self._env.reset(**kwargs)
     obs['speed'] = 0.0
     return obs
 
