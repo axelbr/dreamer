@@ -534,7 +534,7 @@ def main(config):
     # training step
     print('Start collection.')
     steps = config.eval_every // config.action_repeat
-    state = tools.simulate(agent, train_envs, steps, state=state)
+    state, _ = tools.simulate(agent, train_envs, steps, state=state)
     step = count_steps(datadir, config)
     # save checkpoint
     agent.save(config.logdir / 'variables.pkl')
