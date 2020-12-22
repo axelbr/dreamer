@@ -517,17 +517,22 @@ def main(config):
     agent.load(config.logdir / 'variables.pkl')
   state = None
 
+  best_test_return = 0.0
   while step < config.steps:
     # Evaluation step
     print('Start evaluation.')
-    tools.simulate(
+    _, cum_reward = tools.simulate(
         functools.partial(agent, training=False), test_envs, episodes=1)
     writer.flush()
+    if (max(cum_reward) > best_test_return):
+      best_test_return = max(cum_reward)
+      agent.save(config.logdir / f'variables_steps{step}_return{best_test_return:.1f}.pkl')
     # training step
     print('Start collection.')
     steps = config.eval_every // config.action_repeat
     state = tools.simulate(agent, train_envs, steps, state=state)
     step = count_steps(datadir, config)
+    # save checkpoint
     agent.save(config.logdir / 'variables.pkl')
 
 if __name__ == '__main__':
