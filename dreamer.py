@@ -527,7 +527,10 @@ def main(config):
     writer.flush()
     if (max(cum_reward) > best_test_return):
       best_test_return = max(cum_reward)
-      agent.save(config.logdir / f'variables_steps{step}_return{best_test_return:.1f}.pkl')
+      checkpoint_dir = config.logdir / f'checkpoint_{step}steps_return{best_test_return:.1f}'
+      checkpoint_dir.mkdir(parents=True, exist_ok=True)
+      for model in [agent._encode, agent._dynamics, agent._decode, agent._reward, agent._actor]:
+        model.save(checkpoint_dir / f'{model._name}.pkl')
     # training step
     print('Start collection.')
     steps = config.eval_every // config.action_repeat

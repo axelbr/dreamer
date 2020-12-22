@@ -12,6 +12,7 @@ class RSSM(tools.Module):
 
   def __init__(self, stoch=30, deter=200, hidden=200, act=tf.nn.elu):
     super().__init__()
+    self._name = "rssm"
     self._activation = act
     self._stoch_size = stoch
     self._deter_size = deter
@@ -84,6 +85,7 @@ class RSSM(tools.Module):
 
 class LidarEncoder(tools.Module):
   def __init__(self, output_dim, act=tf.nn.relu, obs_type="lidar"):
+    self._name = "encoder"
     self._act = act
     self._output_dim = output_dim
     self._obs_type = obs_type
@@ -105,6 +107,7 @@ class LidarEncoder(tools.Module):
 
 class MLPLidarEncoder(tools.Module):
   def __init__(self, encoded_dim, depth, act=tf.nn.relu):
+    self._name = "encoder"
     self._act = act
     self._depth = depth
     self._encoded_dim = encoded_dim
@@ -128,7 +131,7 @@ class MLPLidarEncoder(tools.Module):
 class IdentityEncoder(tools.Module):
   # note: this is just to see what happens without reducing the observation
   def __init__(self):
-    pass
+    self._name = "encoder"
 
   def __call__(self, obs):
     if type(obs) == dict:
@@ -140,6 +143,7 @@ class IdentityEncoder(tools.Module):
 
 class MLPLidarDecoder(tools.Module):
   def __init__(self, depth, shape, act=tf.nn.relu):
+    self._name = "decoder"
     self._act = act
     self._shape = shape
     self._depth = depth
@@ -158,6 +162,7 @@ class MLPLidarDecoder(tools.Module):
 class LidarDecoder(tools.Module):
 
   def __init__(self, output_dim, act=tf.nn.relu):
+    self._name = "decoder"
     self._act = act
     self._output_dim = output_dim
 
@@ -173,6 +178,7 @@ class LidarDecoder(tools.Module):
 class ConvEncoder(tools.Module):
 
   def __init__(self, depth=32, act=tf.nn.relu, obs_type="image"):
+    self._name = "encoder"
     self._act = act
     self._depth = depth
     self._obs_type = obs_type
@@ -192,6 +198,7 @@ class ConvEncoder(tools.Module):
 class ConvDecoder(tools.Module):
 
   def __init__(self, depth=32, act=tf.nn.relu, shape=(64, 64, 3)):
+    self._name = "decoder"
     self._act = act
     self._depth = depth
     self._shape = shape
@@ -211,6 +218,7 @@ class ConvDecoder(tools.Module):
 class DenseDecoder(tools.Module):
 
   def __init__(self, shape, layers, units, dist='normal', act=tf.nn.elu):
+    self._name = "reward"
     self._shape = shape
     self._layers = layers
     self._units = units
@@ -235,6 +243,7 @@ class ActionDecoder(tools.Module):
   def __init__(
           self, size, layers, units, dist='tanh_normal', act=tf.nn.elu,
           min_std=1e-4, init_std=5, mean_scale=5):
+    self._name = "actor"
     self._size = size
     self._layers = layers
     self._units = units
