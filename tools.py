@@ -275,7 +275,7 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
         if balance:
           index = min(random.randint(0, total), available)
         else:
-          index = int(random.randint(0, available))
+          index = int(random.randint(0, available + 1))     # +1 for include the last step in the sampled episode
         episode = {k: v[index: index + length] for k, v in episode.items()}
       yield episode
 
