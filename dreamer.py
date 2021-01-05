@@ -51,8 +51,8 @@ def define_config():
   config.parallel = 'none'
   config.action_repeat = 4
   config.time_limit = 30000
-  config.prefill_agent = 'random'
-  config.prefill = 5000
+  config.prefill_agent = 'gap_follower'
+  config.prefill = 10000
   config.eval_noise = 0.0
   config.clip_rewards = 'none'
   config.clip_rewards_min = -1
@@ -74,19 +74,19 @@ def define_config():
   config.weight_decay_pattern = r'.*'
   # Training.
   config.batch_size = 50
-  config.batch_length = 30
+  config.batch_length = 50
   config.train_every = 1000
   config.train_steps = 100
   config.pretrain = 100
   config.model_lr = 6e-4
   config.value_lr = 8e-5
   config.actor_lr = 8e-5
-  config.grad_clip = 100.0
+  config.grad_clip = 1.0
   config.dataset_balance = False
   # Behavior.
   config.discount = 0.99
   config.disclam = 0.95
-  config.horizon = 15
+  config.horizon = 20
   config.action_dist = 'tanh_normal'
   config.action_init_std = 5.0
   config.expl = 'additive_gaussian'
