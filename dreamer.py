@@ -479,8 +479,8 @@ def main(config):
       str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
 
-  train_env = make_env(config, writer, 'train', datadir, store=True, gui=True)
-  test_env = make_env(config, writer, 'test', datadir, store=False, gui=True)
+  train_env = make_env(config, writer, 'train', datadir, store=True, gui=False)
+  test_env = make_env(config, writer, 'test', datadir, store=False, gui=False)
   agent_ids = train_env.agent_ids
 
   actspace = train_env.action_space
