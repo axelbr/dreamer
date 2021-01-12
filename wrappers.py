@@ -11,235 +11,65 @@ from PIL import Image
 
 envs = {}
 
-class SingleRaceCarWrapper:
-  def __init__(self, name, prefix, id, rendering=False):
+class RaceCarWrapper:
+  def __init__(self, track, prefix, id, rendering=False):
     from racecar_gym.envs.multi_agent_race import MultiAgentScenario, MultiAgentRaceEnv
     from racecar_gym.tasks import register_task
-    from racecar_gym.tasks.progress_based import MaximizeProgressTask
-    if name not in envs.keys():
+    from racecar_gym.tasks.progress_based import MaximizeProgressTask, MaximizeProgressMaskObstacleTask
+    if track not in envs.keys():
       register_task("maximize_progress", MaximizeProgressTask)
-      scenario = MultiAgentScenario.from_spec(f"scenarios/{name}.yml", rendering=rendering)
-      envs[name] = MultiAgentRaceEnv(scenario=scenario)
+      register_task("maximize_progress_obstacle", MaximizeProgressMaskObstacleTask)
+      scenario = MultiAgentScenario.from_spec(f"scenarios/{track}.yml", rendering=rendering)
+      envs[track] = MultiAgentRaceEnv(scenario=scenario)
     self._mode = "grid" if prefix=="test" else "random"
-    self._env = envs[name]
-    self._agent_ids = list(self._env.observation_space.spaces.keys())
-    self._id = id
-
-
-  @property
-  def observation_space(self):
-    space = self._env.observation_space[self._id]
-    return space
-
-  @property
-  def action_space(self):
-    action_space = self._env.action_space
-    return gym.spaces.Box(
-      np.append(action_space[self._id]['motor'].low, action_space[self._id]['steering'].low),
-      np.append(action_space[self._id]['motor'].high, action_space[self._id]['steering'].high)
-    )
-
-  def step(self, action):
-    actions = dict([(a, {'motor': 0.0, 'steering': 0}) for a in self._agent_ids])
-    actions[self._id] = {'motor': action[0], 'steering': action[1]}
-    obs, reward, done, info = self._env.step(actions)
-    if 'low_res_camera' in obs[self._id]:
-      obs[self._id]['image'] = obs[self._id]['low_res_camera']
-    return obs[self._id], reward[self._id], done[self._id], info[self._id]
-
-  def reset(self):
-    obs = self._env.reset(mode=self._mode)
-    if 'low_res_camera' in obs[self._id]:
-      obs[self._id]['image'] = obs[self._id]['low_res_camera']
-    return obs[self._id]
-
-  def render(self, **kwargs):
-    return self._env.render(**kwargs)
-
-  def close(self):
-    self._env.close()
-
-class ProcgenWrapper(gym.Wrapper):
-
-  def __init__(self, env, seed=None):
-    super().__init__(env)
-    self._random = np.random.RandomState(seed)
-
-  def step(self, action):
-    obs, reward, done, info = super().step(action)
-    return dict(image=obs), reward, done, info
-
-  def reset(self, **kwargs):
-    return dict(image=super().reset())
-
-
-class PyBullet:
-
-  def __init__(self, name, size=(320, 240), camera=None):
-    if name not in envs.keys():
-      envs[name] = gym.make(name)
-    self._env = envs[name]
-    self._env.render()
-    self._env.reset()
-    self._size = size
+    self._env = envs[track]
+    self._id = id     # main agent id, for rendering?
+    self.agent_ids = list(self._env.observation_space.spaces.keys())   # multi-agent ids
+    self.n_agents = len(self.agent_ids)
 
   @property
   def observation_space(self):
-    return gym.spaces.Dict({'image': gym.spaces.Box(0, 255, self._size + (3,), dtype=np.uint8)})
-
-  @property
-  def action_space(self):
-    return self._env.action_space
-
-  def step(self, action):
-    _, reward, done, info = self._env.step(action)
-    obs = self._observe()
-    return obs, reward, done, info
-
-  def reset(self):
-    self._env.reset()
-    return self._observe()
-
-  def _observe(self):
-    return dict(image=self._env.render(mode='rgb_array', width=64, height=64))
-
-
-class DeepMindControl:
-
-  def __init__(self, name, size=(64, 64), camera=None):
-    domain, task = name.split('_', 1)
-    if domain == 'cup':  # Only domain with multiple words.
-      domain = 'ball_in_cup'
-    if isinstance(domain, str):
-      from dm_control import suite
-      self._env = suite.load(domain, task)
-    else:
-      assert task is None
-      self._env = domain()
-    self._size = size
-    if camera is None:
-      camera = dict(quadruped=2).get(domain, 0)
-    self._camera = camera
-
-  @property
-  def observation_space(self):
+    assert 'speed' not in self._env.observation_space.spaces[self._id]
     spaces = {}
-    for key, value in self._env.observation_spec().items():
-      spaces[key] = gym.spaces.Box(
-        -np.inf, np.inf, value.shape, dtype=np.float32)
-    spaces['image'] = gym.spaces.Box(
-      0, 255, self._size + (3,), dtype=np.uint8)
+    for id, obss in self._env.observation_space.spaces.items():
+      agent_space = {}
+      for obs_name, obs_space in obss.spaces.items():
+        agent_space[obs_name] = obs_space
+        agent_space['speed'] = gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32)
+      spaces[id] = gym.spaces.Dict(agent_space)
     return gym.spaces.Dict(spaces)
 
   @property
   def action_space(self):
-    spec = self._env.action_spec()
-    return gym.spaces.Box(spec.minimum, spec.maximum, dtype=np.float32)
+    action_space = self._env.action_space
+    flat_action_space = dict()
+    for id, act in self._env.action_space.spaces.items():
+      flat_action_space[id] = gym.spaces.Box(np.append(act['motor'].low, action_space[self._id]['steering'].low),
+                                             np.append(act['motor'].high, action_space[self._id]['steering'].high))
+    return flat_action_space
 
-  def step(self, action):
-    time_step = self._env.step(action)
-    obs = dict(time_step.observation)
-    obs['image'] = self.render()
-    reward = time_step.reward or 0
-    done = time_step.last()
-    info = {'discount': np.array(time_step.discount, np.float32)}
+  def step(self, actions):
+    actions = {i: {'motor': actions[i][0], 'steering': actions[i][1]} for i in self.agent_ids}
+    obs, reward, done, info = self._env.step(actions)
+    for id in self.agent_ids:
+      obs[id]['speed'] = np.linalg.norm(info[id]['velocity'][:3])
+      if 'low_res_camera' in obs[self._id]:
+        obs[id]['image'] = obs[id]['low_res_camera']
     return obs, reward, done, info
 
   def reset(self):
-    time_step = self._env.reset()
-    obs = dict(time_step.observation)
-    obs['image'] = self.render()
+    obs = self._env.reset(mode=self._mode)
+    for id in self.agent_ids:
+      obs[id]['speed'] = 0.0
+      if 'low_res_camera' in obs[self._id]:
+        obs[id]['image'] = obs[id]['low_res_camera']
     return obs
 
-  def render(self, *args, **kwargs):
-    if kwargs.get('mode', 'rgb_array') != 'rgb_array':
-      raise ValueError("Only render mode 'rgb_array' is supported.")
-    return self._env.physics.render(*self._size, camera_id=self._camera)
-
-
-class Atari:
-
-  LOCK = threading.Lock()
-
-  def __init__(
-          self, name, action_repeat=4, size=(84, 84), grayscale=True, noops=30,
-          life_done=False, sticky_actions=True):
-    import gym
-    version = 0 if sticky_actions else 4
-    name = ''.join(word.title() for word in name.split('_'))
-    with self.LOCK:
-      self._env = gym.make('{}NoFrameskip-v{}'.format(name, version))
-    self._action_repeat = action_repeat
-    self._size = size
-    self._grayscale = grayscale
-    self._noops = noops
-    self._life_done = life_done
-    self._lives = None
-    shape = self._env.observation_space.shape[:2] + (() if grayscale else (3,))
-    self._buffers = [np.empty(shape, dtype=np.uint8) for _ in range(2)]
-    self._random = np.random.RandomState(seed=None)
-
-  @property
-  def observation_space(self):
-    shape = self._size + (1 if self._grayscale else 3,)
-    space = gym.spaces.Box(low=0, high=255, shape=shape, dtype=np.uint8)
-    return gym.spaces.Dict({'image': space})
-
-  @property
-  def action_space(self):
-    return self._env.action_space
+  def render(self, **kwargs):
+    return self._env.render(agent=self._id, **kwargs)
 
   def close(self):
-    return self._env.close()
-
-  def reset(self):
-    with self.LOCK:
-      self._env.reset()
-    noops = self._random.randint(1, self._noops + 1)
-    for _ in range(noops):
-      done = self._env.step(0)[2]
-      if done:
-        with self.LOCK:
-          self._env.reset()
-    self._lives = self._env.ale.lives()
-    if self._grayscale:
-      self._env.ale.getScreenGrayscale(self._buffers[0])
-    else:
-      self._env.ale.getScreenRGB2(self._buffers[0])
-    self._buffers[1].fill(0)
-    return self._get_obs()
-
-  def step(self, action):
-    total_reward = 0.0
-    for step in range(self._action_repeat):
-      _, reward, done, info = self._env.step(action)
-      total_reward += reward
-      if self._life_done:
-        lives = self._env.ale.lives()
-        done = done or lives < self._lives
-        self._lives = lives
-      if done:
-        break
-      elif step >= self._action_repeat - 2:
-        index = step - (self._action_repeat - 2)
-        if self._grayscale:
-          self._env.ale.getScreenGrayscale(self._buffers[index])
-        else:
-          self._env.ale.getScreenRGB2(self._buffers[index])
-    obs = self._get_obs()
-    return obs, total_reward, done, info
-
-  def render(self, mode):
-    return self._env.render(mode)
-
-  def _get_obs(self):
-    if self._action_repeat > 1:
-      np.maximum(self._buffers[0], self._buffers[1], out=self._buffers[0])
-    image = np.array(Image.fromarray(self._buffers[0]).resize(
-      self._size, Image.BILINEAR))
-    image = np.clip(image, 0, 255).astype(np.uint8)
-    image = image[:, :, None] if self._grayscale else image
-    return {'image': image}
+    self._env.close()
 
 
 class Collect:
@@ -248,34 +78,36 @@ class Collect:
     self._env = env
     self._callbacks = callbacks or ()
     self._precision = precision
-    self._episode = None
+    self._episodes = [None for _ in env.agent_ids]      # in multi-agent: store 1 episode for each agent
 
   def __getattr__(self, name):
     return getattr(self._env, name)
 
   def step(self, action):
-    obs, reward, done, info = self._env.step(action)
-    obs = {k: self._convert(v) for k, v in obs.items()}
-    transition = obs.copy()
-    transition['action'] = action
-    transition['reward'] = reward
-    transition['discount'] = info.get('discount', np.array(1 - float(done)))
-    self._episode.append(transition)
-    if done:
-      episode = {k: [t[k] for t in self._episode] for k in self._episode[0]}
-      episode = {k: self._convert(v) for k, v in episode.items()}
-      info['episode'] = episode
+    obss, reward, dones, info = self._env.step(action)
+    obss = {id: {k: self._convert(v) for k, v in obs.items()} for id, obs in obss.items()}
+    transition = obss.copy()
+    for i, id in enumerate(obss.keys()):
+      transition[id]['action'] = action[id]
+      transition[id]['reward'] = reward[id]
+      transition[id]['discount'] = info.get('discount', np.array(1 - float(dones[id])))
+      self._episodes[i].append(transition[id])
+    if any(dones.values()):
+      episodes = [{k: [t[k] for t in episode] for k in episode[0]} for episode in self._episodes]
+      episodes = [{k: self._convert(v) for k, v in episode.items()} for episode in episodes]
+      #info['episode'] = episodes
       for callback in self._callbacks:
-        callback(episode)
-    return obs, reward, done, info
+        callback(episodes)
+    return obss, reward, dones, info
 
   def reset(self):
     obs = self._env.reset()
     transition = obs.copy()
-    transition['action'] = np.zeros(self._env.action_space.shape)
-    transition['reward'] = 0.0
-    transition['discount'] = 1.0
-    self._episode = [transition]
+    for i, id in enumerate(obs.keys()):
+      transition[id]['action'] = np.zeros(self._env.action_space[id].shape)
+      transition[id]['reward'] = 0.0
+      transition[id]['discount'] = 1.0
+      self._episodes[i] = [transition[id]]
     return obs
 
   def _convert(self, value):
@@ -303,14 +135,12 @@ class TimeLimit:
 
   def step(self, action):
     assert self._step is not None, 'Must reset environment.'
-    obs, reward, done, info = self._env.step(action)
+    obs, rewards, dones, info = self._env.step(action)
     self._step += 1
     if self._step >= self._duration:
-      done = True
-      if 'discount' not in info:
-        info['discount'] = np.array(1.0).astype(np.float32)
+      dones = {id: True for id in self._env.agent_ids}
       self._step = None
-    return obs, reward, done, info
+    return obs, rewards, dones, info
 
   def reset(self, **kwargs):
     self._step = 0
@@ -327,14 +157,14 @@ class ActionRepeat:
     return getattr(self._env, name)
 
   def step(self, action):
-    done = False
-    total_reward = 0
+    dones = {id: False for id in self._env.agent_ids}
+    total_rewards = {id: 0.0 for id in self._env.agent_ids}
     current_step = 0
-    while current_step < self._amount and not done:
-      obs, reward, done, info = self._env.step(action)
-      total_reward += reward
+    while current_step < self._amount and not any(dones.values()):
+      obs, rewards, dones, info = self._env.step(action)
+      total_rewards = {id: total_rewards[id] + rewards[id] for id in self._env.agent_ids}
       current_step += 1
-    return obs, total_reward, done, info
+    return obs, total_rewards, dones, info
 
   def render(self, **kwargs):
     return self._env.render(**kwargs)
@@ -372,9 +202,6 @@ class ReduceActionSpace:
 
   def __init__(self, env, low, high):
     self._env = env
-    self._mask = np.logical_and(
-      np.isfinite(env.action_space.low),
-      np.isfinite(env.action_space.high))
     self._low = np.array(low)
     self._high = np.array(high)
 
@@ -382,8 +209,7 @@ class ReduceActionSpace:
     return getattr(self._env, name)
 
   def step(self, action):
-    original = (action + 1) / 2 * (self._high - self._low) + self._low
-    original = np.where(self._mask, original, action)
+    original = {id: (action[id] + 1) / 2 * (self._high - self._low) + self._low for id in self._env.agent_ids}
     return self._env.step(original)
 
 

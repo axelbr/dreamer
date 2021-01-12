@@ -7,6 +7,7 @@ import pathlib
 import sys
 import time
 import math
+import string
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -47,10 +48,9 @@ def define_config():
   config.obs_type = 'lidar'
   # Environment.
   config.task = 'racecar_austria'
-  config.envs = 1
   config.parallel = 'none'
   config.action_repeat = 4
-  config.time_limit = 30000
+  config.time_limit = 4000
   config.prefill_agent = 'gap_follower'
   config.prefill = 10000
   config.eval_noise = 0.0
@@ -101,9 +101,9 @@ class Dreamer(tools.Module):
 
   def __init__(self, config, datadir, actspace, obspace, writer):
     self._c = config
-    self._actspace = actspace
-    self._obspace = obspace
-    self._actdim = actspace.n if hasattr(actspace, 'n') else actspace.shape[0]
+    self._actspace = actspace['A']
+    self._obspace = obspace['A']
+    self._actdim = actspace.n if hasattr(actspace, 'n') else self._actspace.shape[0]
     self._writer = writer
     self._random = np.random.RandomState(config.seed)
     with tf.device('cpu:0'):
@@ -401,8 +401,10 @@ def load_dataset(directory, config):
   dataset = dataset.prefetch(10)
   return dataset
 
-def summarize_episode(episode, config, datadir, writer, prefix):
+def summarize_episode(episodes, config, datadir, writer, prefix):
   global best_return_so_far
+  # note: in multi-agent, each agent produce 1 episode
+  episode = episodes[0]   # we summarize w.r.t. the episode of the first agent
   episodes, steps = tools.count_episodes(datadir)
   episode_len = len(episode['reward']) - 1
   length = episode_len * config.action_repeat
@@ -430,34 +432,24 @@ def summarize_episode(episode, config, datadir, writer, prefix):
         best_return_so_far = episode['reward'].sum()
         if step > config.prefill:
           images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
-          tools.video_summary(f'sim/{prefix}/video', images[None], fps=int(100/config.action_repeat))
+          tools.video_summary(f'sim/{prefix}/video', images[None], fps=100//config.action_repeat)
 
 def make_env(config, writer, prefix, datadir, store, gui=False):
-  suite, task = config.task.split('_', 1)
-  if suite == 'dmc':
-    env = wrappers.DeepMindControl(task)
-    env = wrappers.ActionRepeat(env, config.action_repeat)
-    env = wrappers.NormalizeActions(env)
-  elif suite == 'atari':
-    env = wrappers.Atari(
-        task, config.action_repeat, (64, 64), grayscale=False,
-        life_done=True, sticky_actions=True)
-    env = wrappers.OneHotAction(env)
-  elif suite == 'racecar':
-    env = wrappers.SingleRaceCarWrapper(name=task, prefix=prefix, id='A', rendering=gui)
+  suite, track = config.task.split('_', 1)
+  if suite == 'racecar':
+    env = wrappers.RaceCarWrapper(track=track, prefix=prefix, id='A', rendering=gui)
     env = wrappers.ActionRepeat(env, config.action_repeat)
     env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
-    env = wrappers.SpeedObs(env)
   else:
     raise NotImplementedError(suite)
   env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
   callbacks = []
   if store:
-    callbacks.append(lambda ep: tools.save_episodes(datadir, [ep]))
+    callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
   callbacks.append(
-      lambda ep: summarize_episode(ep, config, datadir, writer, prefix))
+      lambda episodes: summarize_episode(episodes, config, datadir, writer, prefix))
   env = wrappers.Collect(env, callbacks, config.precision)
-  env = wrappers.RewardObs(env)
+  #env = wrappers.RewardObs(env)  # do we really need it?
   return env
 
 
@@ -487,11 +479,12 @@ def main(config):
       str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
 
-  train_envs = [make_env(config, writer, 'train', datadir, store=True, gui=False)]
-  test_envs = [make_env(config, writer, 'test', datadir, store=False, gui=False)]
+  train_env = make_env(config, writer, 'train', datadir, store=True, gui=True)
+  test_env = make_env(config, writer, 'test', datadir, store=False, gui=True)
+  agent_ids = train_env.agent_ids
 
-  actspace = train_envs[0].action_space
-  obspace = train_envs[0].observation_space
+  actspace = train_env.action_space
+  obspace = train_env.observation_space
 
   # Prefill dataset with random episodes.
   step = count_steps(datadir, config)
@@ -499,12 +492,13 @@ def main(config):
   print(f'Prefill dataset ({config.prefill_agent}) with {prefill} steps.')
 
   if config.prefill_agent=='random':
-    random_agent = lambda o, d, _: ([actspace.sample() for _ in d], None)
-    tools.simulate(random_agent, train_envs, prefill / config.action_repeat)
+    id = agent_ids[0]
+    random_agent = lambda o, d, s: ([train_env.action_space[id].sample()], None)  # note: it must work as single agent
+    tools.simulate(random_agent, train_env, prefill / config.action_repeat, agents_ids=agent_ids)
   elif config.prefill_agent=='gap_follower':
     gapfollower = GapFollower()
-    gap_follower_agent = lambda o, d, _: ([gapfollower.action(o) for _ in d], None)
-    tools.simulate(gap_follower_agent, train_envs, prefill / config.action_repeat)
+    gap_follower_agent = lambda o, d, s: ([gapfollower.action(o)], None)
+    tools.simulate(gap_follower_agent, train_env, prefill / config.action_repeat, agents_ids=agent_ids)
   else:
     raise NotImplementedError(f'prefill agent {config.prefill_agent} not implemented')
   writer.flush()
@@ -516,17 +510,17 @@ def main(config):
   if (config.logdir / 'variables.pkl').exists():
     print('Load checkpoint.')
     agent.load(config.logdir / 'variables.pkl')
-  state = None
 
+  simulation_state = None
   best_test_return = 0.0
   while step < config.steps:
     # Evaluation step
     print('Start evaluation.')
     _, cum_reward = tools.simulate(
-        functools.partial(agent, training=False), test_envs, episodes=1)
+        functools.partial(agent, training=False), test_env, episodes=1, agents_ids=agent_ids)
     writer.flush()
-    if (max(cum_reward) > best_test_return):
-      best_test_return = max(cum_reward)
+    if (cum_reward > best_test_return):
+      best_test_return = cum_reward
       checkpoint_dir = config.logdir / f'checkpoint_{step}steps_return{best_test_return:.1f}'
       checkpoint_dir.mkdir(parents=True, exist_ok=True)
       for model in [agent._encode, agent._dynamics, agent._decode, agent._reward, agent._actor]:
@@ -535,7 +529,7 @@ def main(config):
     # training step
     print('Start collection.')
     steps = config.eval_every // config.action_repeat
-    state, _ = tools.simulate(agent, train_envs, steps, state=state)
+    simulation_state, _ = tools.simulate(agent, train_env, steps, sim_state=simulation_state, agents_ids=agent_ids)
     step = count_steps(datadir, config)
     # save checkpoint
     agent.save(config.logdir / 'variables.pkl')

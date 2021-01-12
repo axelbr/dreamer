@@ -187,43 +187,41 @@ def encode_gif(frames, fps):
   return out
 
 
-def simulate(agent, envs, steps=0, episodes=0, state=None):
+def simulate(agent, env, steps=0, episodes=0, sim_state=None, agents_ids=['A']):
+  n_agents = len(agents_ids)
   # Initialize or unpack simulation state.
-  if state is None:
+  if sim_state is None:
     step, episode = 0, 0
-    done = np.ones(len(envs), np.bool)
-    length = np.zeros(len(envs), np.int32)
-    obs = [None] * len(envs)
-    cum_reward = [0.0] * len(envs)
-    agent_state = None
+    dones = {id: True for id in agents_ids}
+    length = np.zeros(n_agents, np.int32)
+    obs = {id: None for id in agents_ids}
+    cum_reward = {id: 0.0 for id in agents_ids}
+    agent_states = {id: None for id in agents_ids}
   else:
-    step, episode, done, length, obs, agent_state = state
-    cum_reward = [0.0] * len(envs)
+    step, episode, dones, length, obs, agent_states = sim_state
+    cum_reward = {id: 0.0 for id in agents_ids}
   while (steps and step < steps) or (episodes and episode < episodes):
     # Reset envs if necessary.
-    if done.any():
-      indices = [index for index, d in enumerate(done) if d]
-      obss = [envs[i].reset() for i in indices]
-      for index, o in zip(indices, obss):
-        obs[index] = o
-        cum_reward[index] = 0.0
+    if any(dones.values()):
+      obs = env.reset()
+      cum_reward = {id: 0.0 for id in agents_ids}
     # Step agents.
-    obs = {k: np.stack([o[k] for o in obs]) for k in obs[0]}
-    action, agent_state = agent(obs, done, agent_state)
-    action = np.array(action)
-    assert len(action) == len(envs)
+    obs = {id: {k: np.stack([v]) for k, v in o.items()} for id, o in obs.items()}
+    actions = dict()
+    for id in agents_ids:
+      actions[id], agent_states[id] = agent(obs[id], np.stack([dones[id]]), agent_states[id])
+      actions[id] = np.array(actions[id][0])
+    assert len(actions) == len(agents_ids)
     # Step envs.
-    obss = [e.step(a) for e, a in zip(envs, action)]
-    obs, _, done = zip(*[p[:3] for p in obss])
-    obs = list(obs)
-    cum_reward = [cum_reward[index] + obs[index]['reward'] for index in range(len(envs))]
-    done = np.stack(done)
-    episode += int(done.sum())
-    length += 1
-    step += (done * length).sum()
+    obs, rewards, dones, _ = env.step(actions)
+    cum_reward = {id: cum_reward[id] + rewards[id] for id in agents_ids}
+    done = any(dones.values())
+    episode += int(done)
+    length += 1                         # episode length until termination
+    step += (int(done) * length).sum()  # num sim steps
     length *= (1 - done)
   # Return new state to allow resuming the simulation.
-  return (step - steps, episode - episodes, done, length, obs, agent_state), cum_reward
+  return (step - steps, episode - episodes, dones, length, obs, agent_states), cum_reward['A']
 
 
 def count_episodes(directory):
