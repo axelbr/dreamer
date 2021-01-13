@@ -16,13 +16,14 @@ class RaceCarWrapper:
     from racecar_gym.envs.multi_agent_race import MultiAgentScenario, MultiAgentRaceEnv
     from racecar_gym.tasks import register_task
     from racecar_gym.tasks.progress_based import MaximizeProgressTask, MaximizeProgressMaskObstacleTask
-    if track not in envs.keys():
+    env_id = track
+    if env_id not in envs.keys():
       register_task("maximize_progress", MaximizeProgressTask)
       register_task("maximize_progress_obstacle", MaximizeProgressMaskObstacleTask)
       scenario = MultiAgentScenario.from_spec(f"scenarios/{track}.yml", rendering=rendering)
-      envs[track] = MultiAgentRaceEnv(scenario=scenario)
+      envs[env_id] = MultiAgentRaceEnv(scenario=scenario)
     self._mode = "grid" if prefix=="test" else "random"
-    self._env = envs[track]
+    self._env = envs[env_id]
     self._id = id     # main agent id, for rendering?
     self.agent_ids = list(self._env.observation_space.spaces.keys())   # multi-agent ids
     self.n_agents = len(self.agent_ids)
@@ -53,7 +54,7 @@ class RaceCarWrapper:
     obs, reward, done, info = self._env.step(actions)
     for id in self.agent_ids:
       obs[id]['speed'] = np.linalg.norm(info[id]['velocity'][:3])
-      if 'low_res_camera' in obs[self._id]:
+      if 'low_res_camera' in obs[id]:
         obs[id]['image'] = obs[id]['low_res_camera']
     return obs, reward, done, info
 
@@ -61,12 +62,12 @@ class RaceCarWrapper:
     obs = self._env.reset(mode=self._mode)
     for id in self.agent_ids:
       obs[id]['speed'] = 0.0
-      if 'low_res_camera' in obs[self._id]:
+      if 'low_res_camera' in obs[id]:
         obs[id]['image'] = obs[id]['low_res_camera']
     return obs
 
   def render(self, **kwargs):
-    return self._env.render(agent=self._id, **kwargs)
+    return self._env.render(**kwargs)
 
   def close(self):
     self._env.close()
@@ -91,11 +92,11 @@ class Collect:
       transition[id]['action'] = action[id]
       transition[id]['reward'] = reward[id]
       transition[id]['discount'] = info.get('discount', np.array(1 - float(dones[id])))
+      transition[id]['progress'] = info[id]['progress']
       self._episodes[i].append(transition[id])
     if any(dones.values()):
       episodes = [{k: [t[k] for t in episode] for k in episode[0]} for episode in self._episodes]
       episodes = [{k: self._convert(v) for k, v in episode.items()} for episode in episodes]
-      #info['episode'] = episodes
       for callback in self._callbacks:
         callback(episodes)
     return obss, reward, dones, info
@@ -107,6 +108,7 @@ class Collect:
       transition[id]['action'] = np.zeros(self._env.action_space[id].shape)
       transition[id]['reward'] = 0.0
       transition[id]['discount'] = 1.0
+      transition[id]['progress'] = 666.0
       self._episodes[i] = [transition[id]]
     return obs
 
@@ -121,6 +123,41 @@ class Collect:
     else:
       raise NotImplementedError(value.dtype)
     return value.astype(dtype)
+
+
+class Render:
+
+  def __init__(self, env, callbacks=None):
+    self._env = env
+    self._callbacks = callbacks or ()
+    self._reset_videos_dict()
+
+  def _reset_videos_dict(self):
+    self._videos = {'birds_eye-A': []}
+    for agent_id in self._env.agent_ids:
+      self._videos[f'follow-{agent_id}'] = []
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
+  def step(self, action):
+    obss, reward, dones, info = self._env.step(action)
+    for k in self._videos.keys():
+      mode, agent = k.split('-')
+      frame = self._env.render(mode=mode, agent=agent)
+      self._videos[k].append(frame)
+    if any(dones.values()):
+      for callback in self._callbacks:
+        callback(self._videos)
+    return obss, reward, dones, info
+
+  def reset(self):
+    obs = self._env.reset()
+    for k in self._videos.keys():
+      mode, agent = k.split('-')
+      frame = self._env.render(mode=mode, agent=agent)
+      self._videos[k] = [frame]
+    return obs
 
 
 class TimeLimit:

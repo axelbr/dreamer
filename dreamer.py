@@ -381,7 +381,8 @@ def preprocess(obs, config):
   dtype = prec.global_policy().compute_dtype
   obs = obs.copy()
   with tf.device('cpu:0'):
-    obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
+    if 'image' in obs:
+      obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
     obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
                         clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[config.clip_rewards]
@@ -413,6 +414,7 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
   metrics = [
       (f'{prefix}/return', float(episode['reward'].sum())),
       (f'{prefix}/length', len(episode['reward']) - 1),
+      (f'{prefix}/progress', float(abs(episode['progress'][-1] - episode['progress'][1]))),  #note: episode[0]['progress'] is a placeholder
       (f'episodes', episodes)]
   step = count_steps(datadir, config)
   with (config.logdir / 'metrics.jsonl').open('a') as f:
@@ -420,19 +422,20 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
-    if prefix == 'test':
-      obs = preprocess(episode, config)    # for normalization of lidar
-      obs['lidar'] = obs['lidar'] + .5
-      images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
-      lidars = tools.lidar_to_image(obs['lidar'][None])[0].numpy()
-      tools.video_summary(f'sim/{prefix}/video', np.concatenate([images, lidars], axis=2)[None],
-                          fps=int(100/config.action_repeat))
-    if config.log_images:
-      if prefix == 'train' and episode['reward'].sum() > best_return_so_far:
-        best_return_so_far = episode['reward'].sum()
-        if step > config.prefill:
-          images = tools.overimpose_speed_on_frames(episode['image'], episode['speed'])
-          tools.video_summary(f'sim/{prefix}/video', images[None], fps=100//config.action_repeat)
+
+
+def render_episode(videos, config, datadir):
+  if not config.log_images:
+    return
+  step = count_steps(datadir, config)
+  video_dir = config.logdir / f'video/{step}'
+  video_dir.mkdir(parents=True, exist_ok=True)
+  import imageio
+  for filename, video in videos.items():
+    writer = imageio.get_writer(f'{video_dir}/{filename}.mp4', fps=100 // config.action_repeat)
+    for image in video:
+      writer.append_data(image)
+    writer.close()
 
 def make_env(config, writer, prefix, datadir, store, gui=False):
   suite, track = config.task.split('_', 1)
@@ -443,6 +446,10 @@ def make_env(config, writer, prefix, datadir, store, gui=False):
   else:
     raise NotImplementedError(suite)
   env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
+  if prefix == 'test':
+    render_callbacks = []
+    render_callbacks.append(lambda videos: render_episode(videos, config, datadir))
+    env = wrappers.Render(env, render_callbacks)
   callbacks = []
   if store:
     callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
@@ -470,6 +477,10 @@ def main(config):
     prec.set_policy(prec.Policy('mixed_float16'))
   config.steps = int(config.steps)
   config.logdir.mkdir(parents=True, exist_ok=True)
+  checkpoint_dir = config.logdir / 'checkpoints'
+  checkpoint_dir.mkdir(parents=True, exist_ok=True)
+  best_checkpoint_dir = checkpoint_dir / 'best'
+  best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
   write_config_summary(config)
   print('Logdir', config.logdir)
 
@@ -507,32 +518,35 @@ def main(config):
   step = count_steps(datadir, config)
   print(f'Simulating agent for {config.steps-step} steps.')
   agent = Dreamer(config, datadir, actspace, obspace, writer)
-  if (config.logdir / 'variables.pkl').exists():
+  # Resume last checkpoint (checkpoints are `{checkpoint_dir}/{step}.pkl`
+  checkpoints = sorted(checkpoint_dir.glob('*pkl'), key=lambda f: int(f.name.split('.')[0]))
+  if len(checkpoints):
+    last_checkpoint = checkpoints[-1]
+    agent.load(last_checkpoint)
     print('Load checkpoint.')
-    agent.load(config.logdir / 'variables.pkl')
 
   simulation_state = None
   best_test_return = 0.0
   while step < config.steps:
-    # Evaluation step
+    # Evaluation phase
     print('Start evaluation.')
     _, cum_reward = tools.simulate(
         functools.partial(agent, training=False), test_env, episodes=1, agents_ids=agent_ids)
     writer.flush()
+    # Save best model
     if (cum_reward > best_test_return):
       best_test_return = cum_reward
-      checkpoint_dir = config.logdir / f'checkpoint_{step}steps_return{best_test_return:.1f}'
-      checkpoint_dir.mkdir(parents=True, exist_ok=True)
       for model in [agent._encode, agent._dynamics, agent._decode, agent._reward, agent._actor]:
-        model.save(checkpoint_dir / f'{model._name}.pkl')
-      agent.save(checkpoint_dir / 'variables.pkl')    # store also the whole model
-    # training step
+        model.save(best_checkpoint_dir / f'{model._name}.pkl')
+      agent.save(best_checkpoint_dir / 'variables.pkl')    # store also the whole model
+    # Save regular checkpoint
+    step = count_steps(datadir, config)
+    agent.save(checkpoint_dir / f'{step}.pkl')
+    # Training phase
     print('Start collection.')
     steps = config.eval_every // config.action_repeat
     simulation_state, _ = tools.simulate(agent, train_env, steps, sim_state=simulation_state, agents_ids=agent_ids)
     step = count_steps(datadir, config)
-    # save checkpoint
-    agent.save(config.logdir / 'variables.pkl')
 
 if __name__ == '__main__':
   try:
