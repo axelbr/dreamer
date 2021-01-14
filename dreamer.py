@@ -31,7 +31,7 @@ import tools
 import wrappers
 from datetime import datetime
 
-tf.config.run_functions_eagerly(run_eagerly=True)
+#tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
