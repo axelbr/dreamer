@@ -427,8 +427,6 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
 
 
 def render_episode(videos, config, datadir):
-  if not config.log_images:
-    return
   step = count_steps(datadir, config)
   video_dir = config.logdir / f'video/{step}'
   video_dir.mkdir(parents=True, exist_ok=True)
