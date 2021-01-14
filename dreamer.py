@@ -44,6 +44,7 @@ def define_config():
   config.log_every = 1e3
   config.log_scalars = True
   config.log_images = True
+  config.log_videos = True
   config.gpu_growth = True
   config.precision = 32
   config.obs_type = 'lidar'
@@ -427,6 +428,8 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
 
 
 def render_episode(videos, config, datadir):
+  if not config.log_videos:
+    return
   step = count_steps(datadir, config)
   video_dir = config.logdir / f'video/{step}'
   video_dir.mkdir(parents=True, exist_ok=True)
