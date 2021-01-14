@@ -32,6 +32,34 @@ efficiently learn a long-horizon policy.
 [paper]: https://arxiv.org/pdf/1912.01603.pdf
 [code]: https://github.com/google-research/dreamer
 
+## Run with Docker
+
+The image is based on `tensorflow:2.3.1-gpu`, you need `nvidia-docker` to run them.
+See ![here](https://github.com/NVIDIA/nvidia-docker) for more details.
+
+To build the image:
+```  
+docker build -t dreamer:1.0 .
+```
+
+To run the container:
+```
+docker run
+    -v $(pwd)/logs:/dreamer/logs
+    -v $(pwd)/scenarios:/dreamer/scenarios
+    --name dreamer
+    --runtime=nvidia
+    --rm
+    dreamer:1.0 
+    --task racecar_columbia --logdir logs/prova_docker --prefill 100 --steps 1000
+```
+
+**Note:** 
+- You can attach the dreamer's input parameter at the end of the command.
+- The mount point `logs` allows you to write the results on the host machine.
+- The host can monitor the experiment by running `tensorboard --logdir logs/`
+- The mount point `scenarios` allows the user to fast-prototype new race scenarios. 
+
 ## Instructions
 
 Get dependencies:

@@ -1,0 +1,5 @@
+.*
+export_log*
+logs*
+pretrained_models
+racing_dreamer
