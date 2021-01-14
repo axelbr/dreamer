@@ -38,6 +38,7 @@ def define_config():
   # General.
   config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
   config.seed = 0
+  config.multi_test = False       # if `true`, run 5 experiments by varying the seeds
   config.steps = 5e6
   config.eval_every = 1e4
   config.log_every = 1e3
@@ -558,4 +559,10 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   for key, value in define_config().items():
     parser.add_argument(f'--{key}', type=tools.args_type(value), default=value)
-  main(parser.parse_args())
+  args = parser.parse_args()
+  if args.multi_test:
+    base_logdir = args.logdir
+    for seed in [123456789, 234567891, 345678912, 456789123, 567891234]:
+      args.seed = seed
+      args.logdir = base_logdir / f'seed{seed}'
+      main(args)
