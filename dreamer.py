@@ -566,3 +566,5 @@ if __name__ == '__main__':
       args.seed = seed
       args.logdir = base_logdir / f'seed{seed}'
       main(args)
+  else:
+    main(args)
