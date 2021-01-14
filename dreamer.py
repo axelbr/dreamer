@@ -31,7 +31,7 @@ import tools
 import wrappers
 from datetime import datetime
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
@@ -411,10 +411,12 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
   length = episode_len * config.action_repeat
   ret = episode['reward'].sum()
   print(f'{prefix.title()} episode of length {episode_len} ({length} sim steps) with return {ret:.1f}.')
+  # todo: compute progress invariant from the direction, issue: car crossing the line in the wrong direction
+  # e.g. progress[0]=0.01, progress[-1]=0.80 -> delta = 0.21 but it is (0.8-0.1)=0.79. how to check the direction?
   metrics = [
       (f'{prefix}/return', float(episode['reward'].sum())),
       (f'{prefix}/length', len(episode['reward']) - 1),
-      (f'{prefix}/progress', float(abs(episode['progress'][-1] - episode['progress'][1]))),  #note: episode[0]['progress'] is a placeholder
+      (f'{prefix}/progress', float(episode['progress'][-1])),
       (f'episodes', episodes)]
   step = count_steps(datadir, config)
   with (config.logdir / 'metrics.jsonl').open('a') as f:
