@@ -31,7 +31,7 @@ import tools
 import wrappers
 from datetime import datetime
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
@@ -126,6 +126,7 @@ class Dreamer(tools.Module):
     step = self._step.numpy().item()
     tf.summary.experimental.set_step(step)
     if state is not None and reset.any():
+      mask = tf.cast(1 - reset, self._float)[:, None]
       mask = tf.cast(1 - reset, self._float)[:, None]
       state = tf.nest.map_structure(lambda x: x * mask, state)
     if self._should_train(step) and training:

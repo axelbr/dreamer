@@ -11,6 +11,7 @@ from PIL import Image
 
 envs = {}
 
+
 class RaceCarWrapper:
   def __init__(self, track, prefix, id, rendering=False):
     from racecar_gym.envs.multi_agent_race import MultiAgentScenario, MultiAgentRaceEnv
@@ -73,56 +74,66 @@ class RaceCarWrapper:
     self._env.close()
 
 
-class Collect:
+class ActionRepeat:
 
-  def __init__(self, env, callbacks=None, precision=32):
+  def __init__(self, env, amount):
     self._env = env
-    self._callbacks = callbacks or ()
-    self._precision = precision
-    self._episodes = [None for _ in env.agent_ids]      # in multi-agent: store 1 episode for each agent
+    self._amount = amount
 
   def __getattr__(self, name):
     return getattr(self._env, name)
 
   def step(self, action):
-    obss, reward, dones, info = self._env.step(action)
-    obss = {id: {k: self._convert(v) for k, v in obs.items()} for id, obs in obss.items()}
-    transition = obss.copy()
-    for i, id in enumerate(obss.keys()):
-      transition[id]['action'] = action[id]
-      transition[id]['reward'] = reward[id]
-      transition[id]['discount'] = info.get('discount', np.array(1 - float(dones[id])))
-      transition[id]['progress'] = info[id]['progress']
-      self._episodes[i].append(transition[id])
-    if any(dones.values()):
-      episodes = [{k: [t[k] for t in episode] for k in episode[0]} for episode in self._episodes]
-      episodes = [{k: self._convert(v) for k, v in episode.items()} for episode in episodes]
-      for callback in self._callbacks:
-        callback(episodes)
-    return obss, reward, dones, info
+    dones = {id: False for id in self._env.agent_ids}
+    total_rewards = {id: 0.0 for id in self._env.agent_ids}
+    current_step = 0
+    while current_step < self._amount and not any(dones.values()):
+      obs, rewards, dones, info = self._env.step(action)
+      total_rewards = {id: total_rewards[id] + rewards[id] for id in self._env.agent_ids}
+      current_step += 1
+    return obs, total_rewards, dones, info
 
-  def reset(self):
-    obs = self._env.reset()
-    transition = obs.copy()
-    for i, id in enumerate(obs.keys()):
-      transition[id]['action'] = np.zeros(self._env.action_space[id].shape)
-      transition[id]['reward'] = 0.0
-      transition[id]['discount'] = 1.0
-      transition[id]['progress'] = 666.0
-      self._episodes[i] = [transition[id]]
-    return obs
+  def render(self, **kwargs):
+    return self._env.render(**kwargs)
 
-  def _convert(self, value):
-    value = np.array(value)
-    if np.issubdtype(value.dtype, np.floating):
-      dtype = {16: np.float16, 32: np.float32, 64: np.float64}[self._precision]
-    elif np.issubdtype(value.dtype, np.signedinteger):
-      dtype = {16: np.int16, 32: np.int32, 64: np.int64}[self._precision]
-    elif np.issubdtype(value.dtype, np.uint8):
-      dtype = np.uint8
-    else:
-      raise NotImplementedError(value.dtype)
-    return value.astype(dtype)
+
+class ReduceActionSpace:
+
+  def __init__(self, env, low, high):
+    self._env = env
+    self._low = np.array(low)
+    self._high = np.array(high)
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
+  def step(self, action):
+    original = {id: (action[id] + 1) / 2 * (self._high - self._low) + self._low for id in self._env.agent_ids}
+    return self._env.step(original)
+
+
+class TimeLimit:
+
+  def __init__(self, env, duration):
+    self._env = env
+    self._duration = duration
+    self._step = None
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
+  def step(self, action):
+    assert self._step is not None, 'Must reset environment.'
+    obs, rewards, dones, info = self._env.step(action)
+    self._step += 1
+    if self._step >= self._duration:
+      dones = {id: True for id in self._env.agent_ids}
+      self._step = None
+    return obs, rewards, dones, info
+
+  def reset(self, **kwargs):
+    self._step = 0
+    return self._env.reset(**kwargs)
 
 
 class Render:
@@ -160,94 +171,56 @@ class Render:
     return obs
 
 
-class TimeLimit:
+class Collect:
 
-  def __init__(self, env, duration):
+  def __init__(self, env, callbacks=None, precision=32):
     self._env = env
-    self._duration = duration
-    self._step = None
+    self._callbacks = callbacks or ()
+    self._precision = precision
+    self._episodes = [None for _ in env.agent_ids]      # in multi-agent: store 1 episode for each agent
 
   def __getattr__(self, name):
     return getattr(self._env, name)
 
   def step(self, action):
-    assert self._step is not None, 'Must reset environment.'
-    obs, rewards, dones, info = self._env.step(action)
-    self._step += 1
-    if self._step >= self._duration:
-      dones = {id: True for id in self._env.agent_ids}
-      self._step = None
-    return obs, rewards, dones, info
+    obss, reward, dones, info = self._env.step(action)
+    obss = {id: {k: self._convert(v) for k, v in obs.items()} for id, obs in obss.items()}
+    transition = obss.copy()
+    for i, id in enumerate(obss.keys()):
+      transition[id]['action'] = action[id]
+      transition[id]['reward'] = reward[id]
+      transition[id]['discount'] = info.get('discount', np.array(1 - float(dones[id])))
+      transition[id]['progress'] = info[id]['lap'] + info[id]['progress']
+      self._episodes[i].append(transition[id])
+    if any(dones.values()):
+      episodes = [{k: [t[k] for t in episode] for k in episode[0]} for episode in self._episodes]
+      episodes = [{k: self._convert(v) for k, v in episode.items()} for episode in episodes]
+      for callback in self._callbacks:
+        callback(episodes)
+    return obss, reward, dones, info
 
-  def reset(self, **kwargs):
-    self._step = 0
-    return self._env.reset(**kwargs)
+  def reset(self):
+    obs = self._env.reset()
+    transition = obs.copy()
+    for i, id in enumerate(obs.keys()):
+      transition[id]['action'] = np.zeros(self._env.action_space[id].shape)
+      transition[id]['reward'] = 0.0
+      transition[id]['discount'] = 1.0
+      transition[id]['progress'] = 666.0
+      self._episodes[i] = [transition[id]]
+    return obs
 
-
-class ActionRepeat:
-
-  def __init__(self, env, amount):
-    self._env = env
-    self._amount = amount
-
-  def __getattr__(self, name):
-    return getattr(self._env, name)
-
-  def step(self, action):
-    dones = {id: False for id in self._env.agent_ids}
-    total_rewards = {id: 0.0 for id in self._env.agent_ids}
-    current_step = 0
-    while current_step < self._amount and not any(dones.values()):
-      obs, rewards, dones, info = self._env.step(action)
-      total_rewards = {id: total_rewards[id] + rewards[id] for id in self._env.agent_ids}
-      current_step += 1
-    return obs, total_rewards, dones, info
-
-  def render(self, **kwargs):
-    return self._env.render(**kwargs)
-
-
-class NormalizeActions:
-
-  def __init__(self, env):
-    self._env = env
-    self._mask = np.logical_and(
-      np.isfinite(env.action_space.low),
-      np.isfinite(env.action_space.high))
-    self._low = np.where(self._mask, env.action_space.low, -1)
-    self._high = np.where(self._mask, env.action_space.high, 1)
-
-  def __getattr__(self, name):
-    return getattr(self._env, name)
-
-  @property
-  def action_space(self):
-    low = np.where(self._mask, -np.ones_like(self._low), self._low)
-    high = np.where(self._mask, np.ones_like(self._low), self._high)
-    return gym.spaces.Box(low, high, dtype=np.float32)
-
-  @property
-  def original_action_space(self):
-    return gym.spaces.Box(self._low, self._high, dtype=np.float32)
-
-  def step(self, action):
-    original = (action + 1) / 2 * (self._high - self._low) + self._low
-    original = np.where(self._mask, original, action)
-    return self._env.step(original)
-
-class ReduceActionSpace:
-
-  def __init__(self, env, low, high):
-    self._env = env
-    self._low = np.array(low)
-    self._high = np.array(high)
-
-  def __getattr__(self, name):
-    return getattr(self._env, name)
-
-  def step(self, action):
-    original = {id: (action[id] + 1) / 2 * (self._high - self._low) + self._low for id in self._env.agent_ids}
-    return self._env.step(original)
+  def _convert(self, value):
+    value = np.array(value)
+    if np.issubdtype(value.dtype, np.floating):
+      dtype = {16: np.float16, 32: np.float32, 64: np.float64}[self._precision]
+    elif np.issubdtype(value.dtype, np.signedinteger):
+      dtype = {16: np.int16, 32: np.int32, 64: np.int64}[self._precision]
+    elif np.issubdtype(value.dtype, np.uint8):
+      dtype = np.uint8
+    else:
+      raise NotImplementedError(value.dtype)
+    return value.astype(dtype)
 
 
 class NormalizeObservations:
@@ -292,21 +265,33 @@ class NormalizeObservations:
     return obs, reward, done, info
 
 
-class GapFollowerWrapper:
-  def __init__(self, action_space):
-    from agents.gap_follower import GapFollower
-    self._gf = GapFollower()
-    # for action normalization
-    self._mask = np.logical_and(
-      np.isfinite(action_space.low),
-      np.isfinite(action_space.high))
-    self._low = np.where(self._mask, action_space.low, -1)
-    self._high = np.where(self._mask, action_space.high, 1)
+class NormalizeActions:
 
-  def action(self, observation, **kwargs):
-    original = self._gf.action(observation)
-    action = 2 * (original - self._low) / (self._high - self._low) - 1
-    return action
+  def __init__(self, env):
+    self._env = env
+    self._mask = np.logical_and(
+      np.isfinite(env.action_space.low),
+      np.isfinite(env.action_space.high))
+    self._low = np.where(self._mask, env.action_space.low, -1)
+    self._high = np.where(self._mask, env.action_space.high, 1)
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
+  @property
+  def action_space(self):
+    low = np.where(self._mask, -np.ones_like(self._low), self._low)
+    high = np.where(self._mask, np.ones_like(self._low), self._high)
+    return gym.spaces.Box(low, high, dtype=np.float32)
+
+  @property
+  def original_action_space(self):
+    return gym.spaces.Box(self._low, self._high, dtype=np.float32)
+
+  def step(self, action):
+    original = (action + 1) / 2 * (self._high - self._low) + self._low
+    original = np.where(self._mask, original, action)
+    return self._env.step(original)
 
 
 class ObsDict:
@@ -397,150 +382,3 @@ class RewardObs:
     obs = self._env.reset()
     obs['reward'] = 0.0
     return obs
-
-
-class SpeedObs:
-
-  def __init__(self, env):
-    self._env = env
-
-  def __getattr__(self, name):
-    return getattr(self._env, name)
-
-  @property
-  def observation_space(self):
-    spaces = self._env.observation_space.spaces
-    assert 'speed' not in spaces
-    spaces['speed'] = gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32)
-    return gym.spaces.Dict(spaces)
-
-  def step(self, action):
-    obs, reward, done, info = self._env.step(action)
-    obs['speed'] = np.linalg.norm(info['velocity'])
-    return obs, reward, done, info
-
-  def reset(self, **kwargs):
-    obs = self._env.reset(**kwargs)
-    obs['speed'] = 0.0
-    return obs
-
-  def render(self, **kwargs):
-    return self._env.render(**kwargs)
-
-
-class Async:
-  _ACCESS = 1
-  _CALL = 2
-  _RESULT = 3
-  _EXCEPTION = 4
-  _CLOSE = 5
-
-  def __init__(self, ctor, strategy='process'):
-    self._strategy = strategy
-    if strategy == 'none':
-      self._env = ctor()
-    elif strategy == 'thread':
-      import multiprocessing.dummy as mp
-    elif strategy == 'process':
-      import multiprocessing as mp
-    else:
-      raise NotImplementedError(strategy)
-    if strategy != 'none':
-      self._conn, conn = mp.Pipe()
-      self._process = mp.Process(target=self._worker, args=(ctor, conn))
-      atexit.register(self.close)
-      self._process.start()
-    self._obs_space = None
-    self._action_space = None
-
-  @property
-  def observation_space(self):
-    if not self._obs_space:
-      self._obs_space = self.__getattr__('observation_space')
-    return self._obs_space
-
-  @property
-  def action_space(self):
-    if not self._action_space:
-      self._action_space = self.__getattr__('action_space')
-    return self._action_space
-
-  def __getattr__(self, name):
-    if self._strategy == 'none':
-      return getattr(self._env, name)
-    self._conn.send((self._ACCESS, name))
-    return self._receive()
-
-  def call(self, name, *args, **kwargs):
-    blocking = kwargs.pop('blocking', True)
-    if self._strategy == 'none':
-      return functools.partial(getattr(self._env, name), *args, **kwargs)
-    payload = name, args, kwargs
-    self._conn.send((self._CALL, payload))
-    promise = self._receive
-    return promise() if blocking else promise
-
-  def close(self):
-    if self._strategy == 'none':
-      try:
-        self._env.close()
-      except AttributeError:
-        pass
-      return
-    try:
-      self._conn.send((self._CLOSE, None))
-      self._conn.close()
-    except IOError:
-      # The connection was already closed.
-      pass
-    self._process.join()
-
-  def step(self, action, blocking=True):
-    return self.call('step', action, blocking=blocking)
-
-  def reset(self, blocking=True):
-    return self.call('reset', blocking=blocking)
-
-  def _receive(self):
-    try:
-      message, payload = self._conn.recv()
-    except ConnectionResetError:
-      raise RuntimeError('Environment worker crashed.')
-    # Re-raise exceptions in the main process.
-    if message == self._EXCEPTION:
-      stacktrace = payload
-      raise Exception(stacktrace)
-    if message == self._RESULT:
-      return payload
-    raise KeyError(f'Received message of unexpected type {message}')
-
-  def _worker(self, ctor, conn):
-    try:
-      env = ctor()
-      while True:
-        try:
-          # Only block for short times to have keyboard exceptions be raised.
-          if not conn.poll(0.1):
-            continue
-          message, payload = conn.recv()
-        except (EOFError, KeyboardInterrupt):
-          break
-        if message == self._ACCESS:
-          name = payload
-          result = getattr(env, name)
-          conn.send((self._RESULT, result))
-          continue
-        if message == self._CALL:
-          name, args, kwargs = payload
-          result = getattr(env, name)(*args, **kwargs)
-          conn.send((self._RESULT, result))
-          continue
-        if message == self._CLOSE:
-          assert payload is None
-          break
-        raise KeyError(f'Received message of unknown type {message}')
-    except Exception:
-      stacktrace = ''.join(traceback.format_exception(*sys.exc_info()))
-      print(f'Error in environment process: {stacktrace}')
-      conn.send((self._EXCEPTION, stacktrace))
-    conn.close()
