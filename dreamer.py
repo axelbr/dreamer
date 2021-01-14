@@ -412,8 +412,6 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
   length = episode_len * config.action_repeat
   ret = episode['reward'].sum()
   print(f'{prefix.title()} episode of length {episode_len} ({length} sim steps) with return {ret:.1f}.')
-  # todo: compute progress invariant from the direction, issue: car crossing the line in the wrong direction
-  # e.g. progress[0]=0.01, progress[-1]=0.80 -> delta = 0.21 but it is (0.8-0.1)=0.79. how to check the direction?
   metrics = [
       (f'{prefix}/return', float(episode['reward'].sum())),
       (f'{prefix}/length', len(episode['reward']) - 1),

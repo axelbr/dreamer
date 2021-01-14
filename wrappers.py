@@ -190,7 +190,7 @@ class Collect:
       transition[id]['action'] = action[id]
       transition[id]['reward'] = reward[id]
       transition[id]['discount'] = info.get('discount', np.array(1 - float(dones[id])))
-      transition[id]['progress'] = info[id]['lap'] + info[id]['progress']
+      transition[id]['progress'] = info[id]['lap'] + info[id]['progress'] - 1   # because lap starts at 1
       self._episodes[i].append(transition[id])
     if any(dones.values()):
       episodes = [{k: [t[k] for t in episode] for k in episode[0]} for episode in self._episodes]
