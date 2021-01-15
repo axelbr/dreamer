@@ -39,26 +39,25 @@ See ![here](https://github.com/NVIDIA/nvidia-docker) for more details.
 
 To build the image:
 ```  
-docker build -t dreamer:1.0 .
+docker build -t dreamer .
 ```
 
 To run the container:
 ```
-docker run
-    -v $(pwd)/logs:/dreamer/logs
-    -v $(pwd)/scenarios:/dreamer/scenarios
+docker run    
+    -u $(id -u):$(id -g) 
+    -v $(pwd):/dreamer
     --name dreamer
-    --runtime=nvidia
+    --gpus all
     --rm
-    dreamer:1.0 
-    --task racecar_columbia --logdir logs/prova_docker --prefill 100 --steps 1000
+    dreamer
+    --task racecar_columbia --logdir logs/racecar_columbia --steps 1000000
 ```
 
-**Note:** 
-- You can attach the dreamer's input parameter at the end of the command.
-- The mount point `logs` allows you to write the results on the host machine.
+**Notes:** 
+- The mount point allows you to use the host version of dreamer. 
+- You can write the results in the `logs` dir (*./logs*). You can customize the race scenarios in `./scenarios`.
 - The host can monitor the experiment by running `tensorboard --logdir logs/`
-- The mount point `scenarios` allows the user to fast-prototype new race scenarios. 
 
 ## Instructions
 

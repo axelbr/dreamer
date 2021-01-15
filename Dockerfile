@@ -14,7 +14,6 @@ WORKDIR /build/src/racecar-gym/models/scenes
 RUN wget https://github.com/axelbr/racecar_gym/releases/download/tracks-v1.0.0/all.zip && unzip all.zip
 
 WORKDIR /dreamer
-COPY . /build
 
 # run dreamer
 ENTRYPOINT ["/usr/bin/python3", "dreamer.py"]
