@@ -13,7 +13,7 @@ envs = {}
 
 
 class RaceCarWrapper:
-  def __init__(self, track, prefix, id, rendering=False):
+  def __init__(self, track, id, rendering=False):
     from racecar_gym.envs.multi_agent_race import MultiAgentScenario, MultiAgentRaceEnv
     from racecar_gym.tasks import register_task
     from racecar_gym.tasks.progress_based import MaximizeProgressTask, MaximizeProgressMaskObstacleTask
@@ -23,7 +23,6 @@ class RaceCarWrapper:
       register_task("maximize_progress_obstacle", MaximizeProgressMaskObstacleTask)
       scenario = MultiAgentScenario.from_spec(f"scenarios/{track}.yml", rendering=rendering)
       envs[env_id] = MultiAgentRaceEnv(scenario=scenario)
-    self._mode = "grid" if prefix=="test" else "random"
     self._env = envs[env_id]
     self._id = id     # main agent id, for rendering?
     self.agent_ids = list(self._env.observation_space.spaces.keys())   # multi-agent ids
@@ -59,8 +58,8 @@ class RaceCarWrapper:
         obs[id]['image'] = obs[id]['low_res_camera']
     return obs, reward, done, info
 
-  def reset(self):
-    obs = self._env.reset(mode=self._mode)
+  def reset(self, **kwargs):
+    obs = self._env.reset(**kwargs)
     for id in self.agent_ids:
       obs[id]['speed'] = 0.0
       if 'low_res_camera' in obs[id]:
@@ -73,6 +72,16 @@ class RaceCarWrapper:
   def close(self):
     self._env.close()
 
+class FixedResetMode:
+  def __init__(self, env, mode):
+    self._env = env
+    self._mode = mode
+
+  def reset(self):
+    return self._env.reset(mode=self._mode)
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
 
 class ActionRepeat:
 
@@ -93,9 +102,6 @@ class ActionRepeat:
       current_step += 1
     return obs, total_rewards, dones, info
 
-  def render(self, **kwargs):
-    return self._env.render(**kwargs)
-
 
 class ReduceActionSpace:
 
@@ -104,12 +110,12 @@ class ReduceActionSpace:
     self._low = np.array(low)
     self._high = np.array(high)
 
-  def __getattr__(self, name):
-    return getattr(self._env, name)
-
   def step(self, action):
     original = {id: (action[id] + 1) / 2 * (self._high - self._low) + self._low for id in self._env.agent_ids}
     return self._env.step(original)
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
 
 
 class TimeLimit:
@@ -131,9 +137,9 @@ class TimeLimit:
       self._step = None
     return obs, rewards, dones, info
 
-  def reset(self, **kwargs):
+  def reset(self):
     self._step = 0
-    return self._env.reset(**kwargs)
+    return self._env.reset()
 
 
 class Render:

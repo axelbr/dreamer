@@ -31,6 +31,7 @@ import tools
 import wrappers
 from datetime import datetime
 
+
 #tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
@@ -38,7 +39,7 @@ def define_config():
   # General.
   config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
   config.seed = 0
-  config.multi_test = False       # if `true`, run 5 experiments by varying the seeds
+  config.multi_test = False  # if `true`, run 5 experiments by varying the seeds
   config.steps = 5e6
   config.eval_every = 1e4
   config.log_every = 1e3
@@ -50,9 +51,9 @@ def define_config():
   config.obs_type = 'lidar'
   # Environment.
   config.task = 'racecar_austria'
-  config.parallel = 'none'
   config.action_repeat = 4
-  config.time_limit = 4000
+  config.time_limit_train = 2000
+  config.time_limit_test = 4000
   config.prefill_agent = 'gap_follower'
   config.prefill = 10000
   config.eval_noise = 0.0
@@ -75,6 +76,7 @@ def define_config():
   config.weight_decay = 0.0
   config.weight_decay_pattern = r'.*'
   # Training.
+  config.training = True    # set it to false if you want to evaluate a trained model
   config.batch_size = 50
   config.batch_length = 50
   config.train_every = 1000
@@ -99,6 +101,8 @@ def define_config():
 
 
 best_return_so_far = - np.Inf
+
+
 class Dreamer(tools.Module):
 
   def __init__(self, config, datadir, actspace, obspace, writer):
@@ -121,7 +125,7 @@ class Dreamer(tools.Module):
     self._strategy = tf.distribute.MirroredStrategy()
     with self._strategy.scope():
       self._dataset = iter(self._strategy.experimental_distribute_dataset(
-          load_dataset(datadir, self._c)))
+        load_dataset(datadir, self._c)))
       self._build_model()
 
   def __call__(self, obs, reset, state=None, training=True):
@@ -197,17 +201,17 @@ class Dreamer(tools.Module):
 
     with tf.GradientTape() as actor_tape:
       imag_feat = self._imagine_ahead(post)
-      reward = tf.cast(self._reward(imag_feat).mode(), 'float')       # cast: to address the output of bernoulli
+      reward = tf.cast(self._reward(imag_feat).mode(), 'float')  # cast: to address the output of bernoulli
       if self._c.pcont:
         pcont = self._pcont(imag_feat).mean()
       else:
         pcont = self._c.discount * tf.ones_like(reward)
       value = self._value(imag_feat).mode()
       returns = tools.lambda_return(
-          reward[:-1], value[:-1], pcont[:-1],
-          bootstrap=value[-1], lambda_=self._c.disclam, axis=0)
+        reward[:-1], value[:-1], pcont[:-1],
+        bootstrap=value[-1], lambda_=self._c.disclam, axis=0)
       discount = tf.stop_gradient(tf.math.cumprod(tf.concat(
-          [tf.ones_like(pcont[:1]), pcont[:-2]], 0), 0))
+        [tf.ones_like(pcont[:1]), pcont[:-2]], 0), 0))
       actor_loss = -tf.reduce_mean(discount * returns)
       actor_loss /= float(self._strategy.num_replicas_in_sync)
 
@@ -224,17 +228,17 @@ class Dreamer(tools.Module):
     if tf.distribute.get_replica_context().replica_id_in_sync_group == 0:
       if self._c.log_scalars:
         self._scalar_summaries(
-            data, feat, prior_dist, post_dist, likes, div,
-            model_loss, value_loss, actor_loss, model_norm, value_norm,
-            actor_norm)
+          data, feat, prior_dist, post_dist, likes, div,
+          model_loss, value_loss, actor_loss, model_norm, value_norm,
+          actor_norm)
       if tf.equal(log_images, True):
         self._image_summaries(data, embed, image_pred)
         self._reward_summaries(data, reward_pred)
 
   def _build_model(self):
     acts = dict(
-        elu=tf.nn.elu, relu=tf.nn.relu, swish=tf.nn.swish,
-        leaky_relu=tf.nn.leaky_relu)
+      elu=tf.nn.elu, relu=tf.nn.relu, swish=tf.nn.swish,
+      leaky_relu=tf.nn.leaky_relu)
     cnn_act = acts[self._c.cnn_act]
     act = acts[self._c.dense_act]
 
@@ -249,17 +253,17 @@ class Dreamer(tools.Module):
     self._reward = models.DenseDecoder((), 2, self._c.num_units, dist=self._c.reward_out_dist, act=act)
     if self._c.pcont:
       self._pcont = models.DenseDecoder(
-          (), 3, self._c.num_units, 'binary', act=act)
+        (), 3, self._c.num_units, 'binary', act=act)
     self._value = models.DenseDecoder((), 3, self._c.num_units, act=act)
     self._actor = models.ActionDecoder(
-        self._actdim, 4, self._c.num_units, self._c.action_dist,
-        init_std=self._c.action_init_std, act=act)
+      self._actdim, 4, self._c.num_units, self._c.action_dist,
+      init_std=self._c.action_init_std, act=act)
     model_modules = [self._encode, self._dynamics, self._decode, self._reward]
     if self._c.pcont:
       model_modules.append(self._pcont)
     Optimizer = functools.partial(
-        tools.Adam, wd=self._c.weight_decay, clip=self._c.grad_clip,
-        wdpattern=self._c.weight_decay_pattern)
+      tools.Adam, wd=self._c.weight_decay, clip=self._c.grad_clip,
+      wdpattern=self._c.weight_decay_pattern)
     self._model_opt = Optimizer('model', model_modules, self._c.model_lr)
     self._value_opt = Optimizer('value', [self._value], self._c.value_lr)
     self._actor_opt = Optimizer('actor', [self._actor], self._c.actor_lr)
@@ -287,9 +291,9 @@ class Dreamer(tools.Module):
     if self._c.expl == 'epsilon_greedy':
       indices = tfd.Categorical(0 * action).sample()
       return tf.where(
-          tf.random.uniform(action.shape[:1], 0, 1) < amount,
-          tf.one_hot(indices, action.shape[-1], dtype=self._float),
-          action)
+        tf.random.uniform(action.shape[:1], 0, 1) < amount,
+        tf.one_hot(indices, action.shape[-1], dtype=self._float),
+        action)
     raise NotImplementedError(self._c.expl)
 
   def _imagine_ahead(self, post):
@@ -298,17 +302,17 @@ class Dreamer(tools.Module):
     flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
     start = {k: flatten(v) for k, v in post.items()}
     policy = lambda state: self._actor(
-        tf.stop_gradient(self._dynamics.get_feat(state))).sample()
+      tf.stop_gradient(self._dynamics.get_feat(state))).sample()
     states = tools.static_scan(
-        lambda prev, _: self._dynamics.img_step(prev, policy(prev)),
-          tf.range(self._c.horizon), start)
+      lambda prev, _: self._dynamics.img_step(prev, policy(prev)),
+      tf.range(self._c.horizon), start)
     imag_feat = self._dynamics.get_feat(states)
     return imag_feat
 
   def _scalar_summaries(
-      self, data, feat, prior_dist, post_dist, likes, div,
-      model_loss, value_loss, actor_loss, model_norm, value_norm,
-      actor_norm):
+          self, data, feat, prior_dist, post_dist, likes, div,
+          model_loss, value_loss, actor_loss, model_norm, value_norm,
+          actor_norm):
     self._metrics['model_grad_norm'].update_state(model_norm)
     self._metrics['value_grad_norm'].update_state(value_norm)
     self._metrics['actor_grad_norm'].update_state(actor_norm)
@@ -350,7 +354,7 @@ class Dreamer(tools.Module):
       error = model_img - truth_img
       openl = tf.concat([truth_img, model_img, error], 2)
     tools.graph_summary(self._writer, tools.video_summary,
-                        'agent/train/autoencoder', openl, self._step, int(100/self._c.action_repeat))
+                        'agent/train/autoencoder', openl, self._step, int(100 / self._c.action_repeat))
 
   def _reward_summaries(self, data, reward_pred):
     summary_size = 6  # nr images to be shown
@@ -360,7 +364,7 @@ class Dreamer(tools.Module):
     video_image = tf.concat([truth, model, error], 1)  # note: no T dimension, then stack over dim 1
     video_image = tf.expand_dims(video_image, axis=1)  # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
     tools.graph_summary(self._writer, tools.video_summary,
-                        'agent/train/reward', video_image, self._step, int(100/self._c.action_repeat))
+                        'agent/train/reward', video_image, self._step, int(100 / self._c.action_repeat))
 
   def _write_summaries(self):
     step = int(self._step.numpy())
@@ -377,8 +381,10 @@ class Dreamer(tools.Module):
     print(f'[{step}]', ' / '.join(f'{k} {v:.1f}' for k, v in metrics))
     self._writer.flush()
 
+
 def count_steps(datadir, config):
   return tools.count_episodes(datadir)[1] * config.action_repeat
+
 
 def preprocess(obs, config):
   dtype = prec.global_policy().compute_dtype
@@ -388,37 +394,40 @@ def preprocess(obs, config):
       obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
     obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
-                        clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[config.clip_rewards]
+                        clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[
+      config.clip_rewards]
     obs['reward'] = clip_rewards(obs['reward'])
   return obs
+
 
 def load_dataset(directory, config):
   episode = next(tools.load_episodes(directory, 1))
   types = {k: v.dtype for k, v in episode.items()}
   shapes = {k: (None,) + v.shape[1:] for k, v in episode.items()}
   generator = lambda: tools.load_episodes(
-      directory, config.train_steps, config.batch_length,
-      config.dataset_balance)
+    directory, config.train_steps, config.batch_length,
+    config.dataset_balance)
   dataset = tf.data.Dataset.from_generator(generator, types, shapes)
   dataset = dataset.map(functools.partial(preprocess, config=config))
   dataset = dataset.batch(config.batch_size, drop_remainder=True)
   dataset = dataset.prefetch(10)
   return dataset
 
+
 def summarize_episode(episodes, config, datadir, writer, prefix):
   global best_return_so_far
   # note: in multi-agent, each agent produce 1 episode
-  episode = episodes[0]   # we summarize w.r.t. the episode of the first agent
+  episode = episodes[0]  # we summarize w.r.t. the episode of the first agent
   episodes, steps = tools.count_episodes(datadir)
   episode_len = len(episode['reward']) - 1
   length = episode_len * config.action_repeat
   ret = episode['reward'].sum()
   print(f'{prefix.title()} episode of length {episode_len} ({length} sim steps) with return {ret:.1f}.')
   metrics = [
-      (f'{prefix}/return', float(episode['reward'].sum())),
-      (f'{prefix}/length', len(episode['reward']) - 1),
-      (f'{prefix}/progress', float(episode['progress'][-1])),
-      (f'episodes', episodes)]
+    (f'{prefix}/return', float(episode['reward'].sum())),
+    (f'{prefix}/length', len(episode['reward']) - 1),
+    (f'{prefix}/progress', float(episode['progress'][-1])),
+    (f'episodes', episodes)]
   step = count_steps(datadir, config)
   with (config.logdir / 'metrics.jsonl').open('a') as f:
     f.write(json.dumps(dict([('step', step)] + metrics)) + '\n')
@@ -440,26 +449,38 @@ def render_episode(videos, config, datadir):
       writer.append_data(image)
     writer.close()
 
-def make_env(config, writer, prefix, datadir, store, gui=False):
-  suite, track = config.task.split('_', 1)
-  if suite == 'racecar':
-    env = wrappers.RaceCarWrapper(track=track, prefix=prefix, id='A', rendering=gui)
-    env = wrappers.ActionRepeat(env, config.action_repeat)
-    env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
-  else:
-    raise NotImplementedError(suite)
-  env = wrappers.TimeLimit(env, config.time_limit / config.action_repeat)
-  if prefix == 'test':
-    render_callbacks = []
-    render_callbacks.append(lambda videos: render_episode(videos, config, datadir))
-    env = wrappers.Render(env, render_callbacks)
+
+def make_train_env(config, writer, datadir, gui=False):
+  env = make_base_env(config, gui)
+  env = wrappers.FixedResetMode(env, mode='random')
+  env = wrappers.TimeLimit(env, config.time_limit_train / config.action_repeat)
   callbacks = []
-  if store:
-    callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
-  callbacks.append(
-      lambda episodes: summarize_episode(episodes, config, datadir, writer, prefix))
+  callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
+  callbacks.append(lambda episodes: summarize_episode(episodes, config, datadir, writer, 'train'))
   env = wrappers.Collect(env, callbacks, config.precision)
-  #env = wrappers.RewardObs(env)  # do we really need it?
+  return env
+
+
+def make_test_env(config, writer, datadir, gui=False):
+  env = make_base_env(config, gui)
+  env = wrappers.FixedResetMode(env, mode='grid')
+  env = wrappers.TimeLimit(env, config.time_limit_test / config.action_repeat)
+  # rendering
+  render_callbacks = []
+  render_callbacks.append(lambda videos: render_episode(videos, config, datadir))
+  env = wrappers.Render(env, render_callbacks)
+  callbacks = []
+  callbacks.append(
+    lambda episodes: summarize_episode(episodes, config, datadir, writer, 'test'))
+  env = wrappers.Collect(env, callbacks, config.precision)
+  return env
+
+
+def make_base_env(config, gui=False):
+  suite, track = config.task.split('_', 1)
+  env = wrappers.RaceCarWrapper(track=track, id='A', rendering=gui)
+  env = wrappers.ActionRepeat(env, config.action_repeat)
+  env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
   return env
 
 
@@ -470,6 +491,7 @@ def write_config_summary(config):
     text += f'{key}:{getattr(config, key)}\n'
   with open(os.path.join(config.logdir, 'config.txt'), 'w') as f:
     f.write(text)
+
 
 def main(config):
   if config.gpu_growth:
@@ -490,11 +512,11 @@ def main(config):
   # Create environments.
   datadir = config.logdir / 'episodes'
   writer = tf.summary.create_file_writer(
-      str(config.logdir), max_queue=1000, flush_millis=20000)
+    str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
 
-  train_env = make_env(config, writer, 'train', datadir, store=True, gui=False)
-  test_env = make_env(config, writer, 'test', datadir, store=False, gui=False)
+  train_env = make_train_env(config, writer, datadir, gui=True)
+  test_env = make_test_env(config, writer, datadir, gui=False)
   agent_ids = train_env.agent_ids
 
   actspace = train_env.action_space
@@ -505,11 +527,11 @@ def main(config):
   prefill = max(0, config.prefill - step)
   print(f'Prefill dataset ({config.prefill_agent}) with {prefill} steps.')
 
-  if config.prefill_agent=='random':
+  if config.prefill_agent == 'random':
     id = agent_ids[0]
     random_agent = lambda o, d, s: ([train_env.action_space[id].sample()], None)  # note: it must work as single agent
     tools.simulate(random_agent, train_env, prefill / config.action_repeat, agents_ids=agent_ids)
-  elif config.prefill_agent=='gap_follower':
+  elif config.prefill_agent == 'gap_follower':
     gapfollower = GapFollower()
     gap_follower_agent = lambda o, d, s: ([gapfollower.action(o)], None)
     tools.simulate(gap_follower_agent, train_env, prefill / config.action_repeat, agents_ids=agent_ids)
@@ -519,7 +541,7 @@ def main(config):
 
   # Train and regularly evaluate the agent.
   step = count_steps(datadir, config)
-  print(f'Simulating agent for {config.steps-step} steps.')
+  print(f'Simulating agent for {config.steps - step} steps.')
   agent = Dreamer(config, datadir, actspace, obspace, writer)
   # Resume last checkpoint (checkpoints are `{checkpoint_dir}/{step}.pkl`
   checkpoints = sorted(checkpoint_dir.glob('*pkl'), key=lambda f: int(f.name.split('.')[0]))
@@ -534,26 +556,29 @@ def main(config):
     # Evaluation phase
     print('Start evaluation.')
     _, cum_reward = tools.simulate(
-        functools.partial(agent, training=False), test_env, episodes=1, agents_ids=agent_ids)
+      functools.partial(agent, training=False), test_env, episodes=1, agents_ids=agent_ids)
     writer.flush()
     # Save best model
     if (cum_reward > best_test_return):
       best_test_return = cum_reward
       for model in [agent._encode, agent._dynamics, agent._decode, agent._reward, agent._actor]:
         model.save(best_checkpoint_dir / f'{model._name}.pkl')
-      agent.save(best_checkpoint_dir / 'variables.pkl')    # store also the whole model
+      agent.save(best_checkpoint_dir / 'variables.pkl')  # store also the whole model
     # Save regular checkpoint
     step = count_steps(datadir, config)
     agent.save(checkpoint_dir / f'{step}.pkl')
     # Training phase
-    print('Start collection.')
-    steps = config.eval_every // config.action_repeat
-    simulation_state, _ = tools.simulate(agent, train_env, steps, sim_state=simulation_state, agents_ids=agent_ids)
-    step = count_steps(datadir, config)
+    if config.training:
+      print('Start collection.')
+      steps = config.eval_every // config.action_repeat
+      simulation_state, _ = tools.simulate(agent, train_env, steps, sim_state=simulation_state, agents_ids=agent_ids)
+      step = count_steps(datadir, config)
+
 
 if __name__ == '__main__':
   try:
     import colored_traceback
+
     colored_traceback.add_hook()
   except ImportError:
     pass
