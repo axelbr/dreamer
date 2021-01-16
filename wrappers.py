@@ -25,8 +25,14 @@ class RaceCarWrapper:
       envs[env_id] = MultiAgentRaceEnv(scenario=scenario)
     self._env = envs[env_id]
     self._id = id     # main agent id, for rendering?
-    self.agent_ids = list(self._env.observation_space.spaces.keys())   # multi-agent ids
-    self.n_agents = len(self.agent_ids)
+
+  @property
+  def agent_ids(self):
+    return list(self._env.observation_space.spaces.keys())   # multi-agent ids
+
+  @property
+  def n_agents(self):
+    return len(self.agent_ids)
 
   @property
   def observation_space(self):
@@ -212,7 +218,7 @@ class Collect:
       transition[id]['action'] = np.zeros(self._env.action_space[id].shape)
       transition[id]['reward'] = 0.0
       transition[id]['discount'] = 1.0
-      transition[id]['progress'] = 666.0
+      transition[id]['progress'] = -1.0
       self._episodes[i] = [transition[id]]
     return obs
 

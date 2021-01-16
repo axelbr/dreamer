@@ -426,7 +426,7 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
   metrics = [
     (f'{prefix}/return', float(episode['reward'].sum())),
     (f'{prefix}/length', len(episode['reward']) - 1),
-    (f'{prefix}/progress', float(episode['progress'][-1])),
+    (f'{prefix}/progress', float(max(episode['progress']))),
     (f'episodes', episodes)]
   step = count_steps(datadir, config)
   with (config.logdir / 'metrics.jsonl').open('a') as f:
@@ -452,7 +452,10 @@ def render_episode(videos, config, datadir):
 
 def make_train_env(config, writer, datadir, gui=False):
   env = make_base_env(config, gui)
-  env = wrappers.FixedResetMode(env, mode='random')
+  if env.n_agents > 1:
+    env = wrappers.FixedResetMode(env, mode='random_ball')    # sample in random points close to each other
+  else:
+    env = wrappers.FixedResetMode(env, mode='random')
   env = wrappers.TimeLimit(env, config.time_limit_train / config.action_repeat)
   callbacks = []
   callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
@@ -515,7 +518,7 @@ def main(config):
     str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
 
-  train_env = make_train_env(config, writer, datadir, gui=True)
+  train_env = make_train_env(config, writer, datadir, gui=False)
   test_env = make_test_env(config, writer, datadir, gui=False)
   agent_ids = train_env.agent_ids
 
@@ -590,7 +593,7 @@ if __name__ == '__main__':
     base_logdir = args.logdir
     for seed in [123456789, 234567891, 345678912, 456789123, 567891234]:
       args.seed = seed
-      args.logdir = base_logdir / f'seed{seed}'
+      args.logdir = base_logdir / f'{seed}'
       main(args)
   else:
     main(args)
