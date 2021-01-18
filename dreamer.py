@@ -8,6 +8,7 @@ import sys
 import time
 import math
 import string
+import random
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -456,7 +457,7 @@ def make_train_env(config, writer, datadir, gui=False):
     env = wrappers.FixedResetMode(env, mode='random_ball')    # sample in random points close to each other
   else:
     env = wrappers.FixedResetMode(env, mode='random')
-  env = wrappers.TimeLimit(env, config.time_limit_train / config.action_repeat)
+  env = wrappers.TimeLimit(env, env.n_agents * config.time_limit_train / config.action_repeat)
   callbacks = []
   callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
   callbacks.append(lambda episodes: summarize_episode(episodes, config, datadir, writer, 'train'))
@@ -467,7 +468,7 @@ def make_train_env(config, writer, datadir, gui=False):
 def make_test_env(config, writer, datadir, gui=False):
   env = make_base_env(config, gui)
   env = wrappers.FixedResetMode(env, mode='grid')
-  env = wrappers.TimeLimit(env, config.time_limit_test / config.action_repeat)
+  env = wrappers.TimeLimit(env, env.n_agents * config.time_limit_test / config.action_repeat)
   # rendering
   render_callbacks = []
   render_callbacks.append(lambda videos: render_episode(videos, config, datadir))
@@ -497,6 +498,12 @@ def write_config_summary(config):
 
 
 def main(config):
+  # seed everything (not work)
+  os.environ['PYTHONHASHSEED'] = str(config.seed)
+  random.seed(config.seed)
+  np.random.seed(config.seed)
+  tf.random.set_seed(config.seed)
+
   if config.gpu_growth:
     for gpu in tf.config.experimental.list_physical_devices('GPU'):
       tf.config.experimental.set_memory_growth(gpu, True)
@@ -532,7 +539,7 @@ def main(config):
 
   if config.prefill_agent == 'random':
     id = agent_ids[0]
-    random_agent = lambda o, d, s: ([train_env.action_space[id].sample()], None)  # note: it must work as single agent
+    random_agent = lambda o, d, s: ([train_env.action_space[id].sample()], None)  # note: it must work as single_agent agent
     tools.simulate(random_agent, train_env, prefill / config.action_repeat, agents_ids=agent_ids)
   elif config.prefill_agent == 'gap_follower':
     gapfollower = GapFollower()
