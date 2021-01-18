@@ -540,11 +540,11 @@ def main(config):
   if config.prefill_agent == 'random':
     id = agent_ids[0]
     random_agent = lambda o, d, s: ([train_env.action_space[id].sample()], None)  # note: it must work as single_agent agent
-    tools.simulate([random_agent for _ in train_env.n_agents], train_env, prefill / config.action_repeat, agents_ids=agent_ids)
+    tools.simulate([random_agent for _ in range(train_env.n_agents)], train_env, prefill / config.action_repeat, agents_ids=agent_ids)
   elif config.prefill_agent == 'gap_follower':
     gapfollower = GapFollower()
     gap_follower_agent = lambda o, d, s: ([gapfollower.action(o)], None)
-    tools.simulate([gap_follower_agent for _ in train_env.n_agents], train_env, prefill / config.action_repeat, agents_ids=agent_ids)
+    tools.simulate([gap_follower_agent for _ in range(train_env.n_agents)], train_env, prefill / config.action_repeat, agents_ids=agent_ids)
   else:
     raise NotImplementedError(f'prefill agent {config.prefill_agent} not implemented')
   writer.flush()
@@ -567,7 +567,7 @@ def main(config):
     print('Start evaluation.')
     eval_agent = functools.partial(agent, training=False)
     _, cum_reward = tools.simulate(
-      [eval_agent for _ in test_env.n_agents], test_env, episodes=1, agents_ids=agent_ids)
+      [eval_agent for _ in range(train_env.n_agents)], test_env, episodes=1, agents_ids=agent_ids)
     writer.flush()
     # Save best model
     if (cum_reward > best_test_return):
@@ -584,7 +584,7 @@ def main(config):
       steps = config.eval_every // config.action_repeat
       train_agent = functools.partial(agent, training=True)
       eval_agent = functools.partial(agent, training=False)
-      simulation_state, _ = tools.simulate([train_agent] + [eval_agent for _ in train_env.n_agents - 1],
+      simulation_state, _ = tools.simulate([train_agent] + [eval_agent for _ in range(train_env.n_agents - 1)],
                                            train_env, steps, sim_state=simulation_state, agents_ids=agent_ids)
       step = count_steps(datadir, config)
 
