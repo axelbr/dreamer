@@ -187,7 +187,7 @@ def encode_gif(frames, fps):
   return out
 
 
-def simulate(agent, env, steps=0, episodes=0, sim_state=None, agents_ids=['A']):
+def simulate(agents, env, steps=0, episodes=0, sim_state=None, agents_ids=['A']):
   n_agents = len(agents_ids)
   # Initialize or unpack simulation state.
   if sim_state is None:
@@ -208,8 +208,11 @@ def simulate(agent, env, steps=0, episodes=0, sim_state=None, agents_ids=['A']):
     # Step agents.
     obs = {id: {k: np.stack([v]) for k, v in o.items()} for id, o in obs.items()}
     actions = dict()
-    for id in agents_ids:
-      actions[id], agent_states[id] = agent(obs[id], np.stack([dones[id]]), agent_states[id])
+    for i, id in enumerate(agents_ids):
+      if i==0:
+        actions[id], agent_states[id] = agents[i](obs[id], np.stack([dones[id]]), agent_states[id])
+      else:
+        actions[id], agent_states[id] = agents[i](obs[id], np.stack([dones[id]]), agent_states[id])
       actions[id] = np.array(actions[id][0])
     assert len(actions) == len(agents_ids)
     # Step envs.
