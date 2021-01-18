@@ -67,16 +67,14 @@ def main(args):
   fig, axes = plt.subplots(1, len(tracks))
   for i, (track, ax) in enumerate(zip(tracks, axes)):
     ax.set_title(track.title())
-    ax.set_xlabel(args.xaxis)
+    ax.set_xlabel(args.xlabel if not args.xlabel else args.xaxis)
     if i<=0:    # show y label only on first row
-      ax.set_ylabel(args.yaxis)
+      ax.set_ylabel(args.ylabel if not args.ylabel else args.yaxis)
     for j, method in enumerate(methods):
       color = PALETTE[j]
       filter_runs = [r for r in runs if r.track==track and r.method==method]
       if len(filter_runs)>0:
         x, mean, std = aggregate(filter_runs, args.binning)
-        if j==1:
-          mean = mean - .2
         ax.plot(x, mean, color=color, label=method)
         ax.fill_between(x, mean - std, mean + std, color=color, alpha=0.1)
     ax.legend()
@@ -90,6 +88,8 @@ def parse():
   parser.add_argument('--outdir', type=pathlib.Path, required=True)
   parser.add_argument('--xaxis', type=str, required=True)
   parser.add_argument('--yaxis', type=str, required=True)
+  parser.add_argument('--xlabel', type=str, default="")
+  parser.add_argument('--ylabel', type=str, default="")
   parser.add_argument('--binning', type=int, default=10000)
   return parser.parse_args()
 
