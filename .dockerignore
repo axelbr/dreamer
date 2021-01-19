@@ -1,5 +1,7 @@
-.*
-export_log*
-logs*
+**/.git
+*.pyc
+
+
+logs
 pretrained_models
 racing_dreamer
