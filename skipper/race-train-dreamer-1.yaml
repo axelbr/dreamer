@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: race-train-dreamer-1
+spec:
+  containers:
+    - name: skipper-pod
+      image: raminmh/dreamer:latest
+      command:
+        - "/bin/bash"
+        - "-c" # run with bash and pass in the args below
+      args:
+        - "python dreamer.py \
+        --task racecar_austria \
+        --logdir /race_dreamer/logs \
+        --log_images False --steps 5000000 \
+        --prefill_agent gap_follower"
