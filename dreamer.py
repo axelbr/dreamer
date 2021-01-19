@@ -567,8 +567,8 @@ def main(config):
     # Evaluation phase
     print('Start evaluation.')
     eval_agent = functools.partial(agent, training=False)
-    _, cum_reward = tools.simulate(
-      [eval_agent for _ in range(train_env.n_agents)], test_env, episodes=1, agents_ids=agent_ids)
+    _, cum_reward = tools.simulate([eval_agent for _ in range(train_env.n_agents)], test_env,
+                                   episodes=1, agents_ids=agent_ids)
     writer.flush()
     # Save best model
     if (cum_reward > best_test_return):
