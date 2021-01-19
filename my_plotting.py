@@ -21,6 +21,8 @@ def load_runs(args):
     for file in files:
       try:
         track, method, seed = file.relative_to(dir).parts[:-1]  # path to jsonl file, e.g. columbia/h20/seed
+        if not track in args.tracks:
+          continue
         with file.open() as f:
           df = pd.DataFrame([json.loads(line) for line in f.readlines()])
         df = df[[args.xaxis, args.yaxis]].dropna()
@@ -67,15 +69,15 @@ def main(args):
   fig, axes = plt.subplots(1, len(tracks))
   for i, (track, ax) in enumerate(zip(tracks, axes)):
     ax.set_title(track.title())
-    ax.set_xlabel(args.xlabel if not args.xlabel else args.xaxis)
+    ax.set_xlabel(args.xlabel if args.xlabel else args.xaxis)
     if i<=0:    # show y label only on first row
-      ax.set_ylabel(args.ylabel if not args.ylabel else args.yaxis)
+      ax.set_ylabel(args.ylabel if args.ylabel else args.yaxis)
     for j, method in enumerate(methods):
       color = PALETTE[j]
       filter_runs = [r for r in runs if r.track==track and r.method==method]
       if len(filter_runs)>0:
         x, mean, std = aggregate(filter_runs, args.binning)
-        ax.plot(x, mean, color=color, label=method)
+        ax.plot(x, mean, color=color, label=method.title())
         ax.fill_between(x, mean - std, mean + std, color=color, alpha=0.1)
     ax.legend()
   args.outdir.mkdir(parents=True, exist_ok=True)
@@ -91,6 +93,7 @@ def parse():
   parser.add_argument('--xlabel', type=str, default="")
   parser.add_argument('--ylabel', type=str, default="")
   parser.add_argument('--binning', type=int, default=10000)
+  parser.add_argument('--tracks', nargs='+', type=str, default=['austria', 'columbia', 'treitlstrasse'])
   return parser.parse_args()
 
 
