@@ -4,7 +4,7 @@ logdir=${1}
 
 echo -e "[Info] Creating tar ball for log dir ${logdir}\n"
 tarball="$(basename -- ${logdir}).tar"
-tar cvf ${tarball} --exclude='*/episodes' --exclude='*/video' --exclude='*/checkpoints/*pkl' ${logdir}
+tar cvf ${tarball} --exclude='*/episodes' --exclude='*/checkpoints/*pkl' ${logdir}
 echo -e "[Info] Created ${tarball}\n"
 
 echo "[Info] Uploading ${tarball} ..."
