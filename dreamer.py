@@ -435,7 +435,7 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
     f.write(json.dumps(dict([('step', step)] + metrics)) + '\n')
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
-    [tf.summary.scalar('sim/' + k, v) for k, v in metrics]
+    [tf.summary.scalar(k, v) for k, v in metrics]
 
 
 def render_episode(videos, config, datadir):
