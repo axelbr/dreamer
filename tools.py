@@ -209,10 +209,7 @@ def simulate(agents, env, steps=0, episodes=0, sim_state=None, agents_ids=['A'])
     obs = {id: {k: np.stack([v]) for k, v in o.items()} for id, o in obs.items()}
     actions = dict()
     for i, id in enumerate(agents_ids):
-      if i==0:
-        actions[id], agent_states[id] = agents[i](obs[id], np.stack([dones[id]]), agent_states[id])
-      else:
-        actions[id], agent_states[id] = agents[i](obs[id], np.stack([dones[id]]), agent_states[id])
+      actions[id], agent_states[id] = agents[i](obs[id], np.stack([dones[id]]), agent_states[id])
       actions[id] = np.array(actions[id][0])
     assert len(actions) == len(agents_ids)
     # Step envs.

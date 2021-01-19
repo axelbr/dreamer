@@ -136,17 +136,18 @@ class Dreamer(tools.Module):
       mask = tf.cast(1 - reset, self._float)[:, None]
       mask = tf.cast(1 - reset, self._float)[:, None]
       state = tf.nest.map_structure(lambda x: x * mask, state)
-    if self._should_train(step) and training:
-      log = self._should_log(step)
-      n = self._c.pretrain if self._should_pretrain() else self._c.train_steps
-      print(f'Training for {n} steps.')
-      with self._strategy.scope():
-        for train_step in range(n):
-          print(f'[Train Step] # {train_step}')
-          log_images = self._c.log_images and log and train_step == 0
-          self.train(next(self._dataset), log_images)
-      if log:
-        self._write_summaries()
+    if training:
+      if self._should_train(step):  # call it only when training
+        log = self._should_log(step)
+        n = self._c.pretrain if self._should_pretrain() else self._c.train_steps
+        print(f'Training for {n} steps.')
+        with self._strategy.scope():
+          for train_step in range(n):
+            print(f'[Train Step] # {train_step}')
+            log_images = self._c.log_images and log and train_step == 0
+            self.train(next(self._dataset), log_images)
+        if log:
+          self._write_summaries()
     action, state = self.policy(obs, state, training)
     if training:
       self._step.assign_add(len(reset) * self._c.action_repeat)
@@ -457,7 +458,7 @@ def make_train_env(config, writer, datadir, gui=False):
     env = wrappers.FixedResetMode(env, mode='random_ball')    # sample in random points close to each other
   else:
     env = wrappers.FixedResetMode(env, mode='random')
-  env = wrappers.TimeLimit(env, env.n_agents * config.time_limit_train / config.action_repeat)
+  env = wrappers.TimeLimit(env, config.time_limit_train / config.action_repeat)
   callbacks = []
   callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
   callbacks.append(lambda episodes: summarize_episode(episodes, config, datadir, writer, 'train'))
@@ -468,7 +469,7 @@ def make_train_env(config, writer, datadir, gui=False):
 def make_test_env(config, writer, datadir, gui=False):
   env = make_base_env(config, gui)
   env = wrappers.FixedResetMode(env, mode='grid')
-  env = wrappers.TimeLimit(env, env.n_agents * config.time_limit_test / config.action_repeat)
+  env = wrappers.TimeLimit(env, config.time_limit_test / config.action_repeat)
   # rendering
   render_callbacks = []
   render_callbacks.append(lambda videos: render_episode(videos, config, datadir))
