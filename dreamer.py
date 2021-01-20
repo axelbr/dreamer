@@ -38,9 +38,9 @@ from datetime import datetime
 def define_config():
   config = tools.AttrDict()
   # General.
-  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
   config.seed = random.randint(2, 1000000)
-  config.multi_test = False  # if `true`, run 5 experiments by varying the seeds
+  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
+  config.multi_test = True  # if `true`, run 5 experiments by varying the seeds
   config.steps = 5e6
   config.eval_every = 1e4
   config.log_every = 1e3
@@ -78,8 +78,8 @@ def define_config():
   config.weight_decay_pattern = r'.*'
   # Training.
   config.training = True    # set it to false if you want to evaluate a trained model
-  config.batch_size = 50
-  config.batch_length = 50
+  config.batch_size = 25
+  config.batch_length = 100
   config.train_every = 1000
   config.train_steps = 100
   config.pretrain = 100
@@ -91,7 +91,7 @@ def define_config():
   # Behavior.
   config.discount = 0.99
   config.disclam = 0.95
-  config.horizon = 20
+  config.horizon = 50
   config.action_dist = 'tanh_normal'
   config.action_init_std = 5.0
   config.expl = 'additive_gaussian'
@@ -603,7 +603,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.multi_test:
     base_logdir = args.logdir
-    for seed in [123456789, 234567891, 345678912, 456789123, 567891234]:
+    for seed in [random.randint(100000000,999999999), random.randint(100000000,999999999), random.randint(100000000,999999999), random.randint(100000000,999999999), random.randint(100000000,999999999)]:
       args.seed = seed
       args.logdir = base_logdir / f'{seed}'
       main(args)

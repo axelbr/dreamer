@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: race-train-dreamer-1
+  name: race-train-dreamer-2
 spec:
   containers:
     - name: skipper-pod
@@ -11,7 +11,7 @@ spec:
         - "-c" # run with bash and pass in the args below
       args:
         - "python dreamer.py \
-        --task racecar_austria \
+        --task racecar_treitlstrasse \
         --logdir /data/race_dreamer/logs \
         --log_images False --steps 5000000 \
         --prefill_agent gap_follower"
