@@ -78,7 +78,7 @@ def define_config():
   config.weight_decay_pattern = r'.*'
   # Training.
   config.training = True    # set it to false if you want to evaluate a trained model
-  config.batch_size = 25
+  config.batch_size = 50
   config.batch_length = 100
   config.train_every = 1000
   config.train_steps = 100

@@ -12,6 +12,6 @@ spec:
       args:
         - "python dreamer.py \
         --task racecar_treitlstrasse \
-        --logdir /data/race_dreamer/logs-2 \
-        --log_images False --steps 500\
+        --logdir /data/race_dreamer/logs \
+        --log_images False --steps 50000\
         --prefill_agent gap_follower"
