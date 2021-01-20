@@ -38,7 +38,7 @@ from datetime import datetime
 def define_config():
   config = tools.AttrDict()
   # General.
-  config.seed = random.randint(2, 1000000)
+  config.seed = random.randint(2, 10**6)
   config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
   config.multi_test = False  # if `true`, run 5 experiments by varying the seeds
   config.steps = 5e6
@@ -603,7 +603,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.multi_test:
     base_logdir = args.logdir
-    for seed in [random.randint(100000000,999999999), random.randint(100000000,999999999), random.randint(100000000,999999999), random.randint(100000000,999999999), random.randint(100000000,999999999)]:
+    for seed in [random.randint(10**8, 10**9 - 1) for _ in range(5)]:
       args.seed = seed
       args.logdir = base_logdir / f'{seed}'
       main(args)
