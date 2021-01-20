@@ -40,7 +40,7 @@ def define_config():
   # General.
   config.seed = random.randint(2, 1000000)
   config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
-  config.multi_test = True  # if `true`, run 5 experiments by varying the seeds
+  config.multi_test = False  # if `true`, run 5 experiments by varying the seeds
   config.steps = 5e6
   config.eval_every = 1e4
   config.log_every = 1e3
