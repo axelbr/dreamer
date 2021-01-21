@@ -507,7 +507,7 @@ def create_log_dirs(config):
   best_checkpoint_dir = checkpoint_dir / 'best'
   best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
   best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
-  print('Logdir', config.logdir)
+  print('Logdir', logdir)
   return logdir, datadir, checkpoint_dir, best_checkpoint_dir
 
 def set_seed(seed):
