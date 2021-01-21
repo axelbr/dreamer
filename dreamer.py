@@ -34,14 +34,14 @@ import wrappers
 from datetime import datetime
 
 
-tf.config.run_functions_eagerly(run_eagerly=True)
+#tf.config.run_functions_eagerly(run_eagerly=True)
 
 
 def define_config():
   config = tools.AttrDict()
   # General.
   config.seed = random.randint(2, 10**6)
-  config.logdir = 'logs'
+  config.logdir = pathlib.Path('logs/experiments')
   config.multi_test = False  # if `true`, run 5 experiments by varying the seeds
   config.steps = 5e6
   config.eval_every = 1e4
@@ -610,7 +610,6 @@ if __name__ == '__main__':
     parser.add_argument(f'--{key}', type=tools.args_type(value), default=value)
   args = parser.parse_args()
   if args.multi_test:
-    args.logdir = pathlib.Path('logs/experiments')
     for seed in [random.randint(10**8, 10**9 - 1) for _ in range(5)]:
       args.seed = seed
       main(args)
