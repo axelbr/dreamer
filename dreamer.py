@@ -500,7 +500,8 @@ def create_log_dirs(config):
   logdir = pathlib.Path(f'{config.logdir}/{track}_dreamer_{task}_{config.seed}_{time.time()}')
   datadir = logdir / 'episodes'
   checkpoint_dir = logdir / 'checkpoints'
-  checkpoint_dir.mkdir(parents=True, exist_ok=True)
+  best_checkpoint_dir = checkpoint_dir / 'best'
+  best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
   return logdir, datadir, checkpoint_dir
 
 def set_seed(seed):
