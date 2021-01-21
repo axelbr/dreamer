@@ -507,7 +507,6 @@ def create_log_dirs(config):
   best_checkpoint_dir = checkpoint_dir / 'best'
   best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
   best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
-  print('Logdir', logdir)
   return logdir, datadir, checkpoint_dir, best_checkpoint_dir
 
 def set_seed(seed):
@@ -528,6 +527,7 @@ def main(config):
   set_seed(config.seed)
   config.logdir, datadir, cp_dir, best_cp_dir = create_log_dirs(config)
   write_config_summary(config)
+  print('Logdir', config.logdir)
 
   # Create environments.
   writer = tf.summary.create_file_writer(
