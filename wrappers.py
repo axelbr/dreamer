@@ -116,12 +116,12 @@ class ReduceActionSpace:
     self._low = np.array(low)
     self._high = np.array(high)
 
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
   def step(self, action):
     original = {id: (action[id] + 1) / 2 * (self._high - self._low) + self._low for id in self._env.agent_ids}
     return self._env.step(original)
-
-  def __getattr__(self, name):
-    return getattr(self._env, name)
 
 
 class TimeLimit:

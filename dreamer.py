@@ -9,6 +9,7 @@ import time
 import math
 import string
 import random
+import imageio
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -33,13 +34,14 @@ import wrappers
 from datetime import datetime
 
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
+
 
 def define_config():
   config = tools.AttrDict()
   # General.
   config.seed = random.randint(2, 10**6)
-  config.logdir = pathlib.Path("./logs/racecar_{}/".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S')))
+  config.logdir = 'logs'
   config.multi_test = False  # if `true`, run 5 experiments by varying the seeds
   config.steps = 5e6
   config.eval_every = 1e4
@@ -438,15 +440,14 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
     [tf.summary.scalar(k, v) for k, v in metrics]
 
 
-def render_episode(videos, config, datadir):
+def save_videos(videos, config, datadir):
   if not config.log_videos:
     return
   step = count_steps(datadir, config)
-  video_dir = config.logdir / f'video/{step}'
+  video_dir = config.logdir / 'videos'
   video_dir.mkdir(parents=True, exist_ok=True)
-  import imageio
   for filename, video in videos.items():
-    writer = imageio.get_writer(f'{video_dir}/{filename}.mp4', fps=100 // config.action_repeat)
+    writer = imageio.get_writer(f'{video_dir}/{filename}_{step}.mp4', fps=100 // config.action_repeat)
     for image in video:
       writer.append_data(image)
     writer.close()
@@ -472,7 +473,7 @@ def make_test_env(config, writer, datadir, gui=False):
   env = wrappers.TimeLimit(env, config.time_limit_test / config.action_repeat)
   # rendering
   render_callbacks = []
-  render_callbacks.append(lambda videos: render_episode(videos, config, datadir))
+  render_callbacks.append(lambda videos: save_videos(videos, config, datadir))
   env = wrappers.Render(env, render_callbacks)
   callbacks = []
   callbacks.append(
@@ -497,31 +498,38 @@ def write_config_summary(config):
   with open(os.path.join(config.logdir, 'config.txt'), 'w') as f:
     f.write(text)
 
+def create_log_dirs(config):
+  suite, track = config.task.split('_', 1)
+  task = 'max_progress'
+  logdir = pathlib.Path(f'{config.logdir}/{track}_dreamer_{task}_{config.seed}_{time.time()}')
+  datadir = logdir / 'episodes'
+  checkpoint_dir = logdir / 'checkpoints'
+  best_checkpoint_dir = checkpoint_dir / 'best'
+  best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
+  best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
+  print('Logdir', config.logdir)
+  return logdir, datadir, checkpoint_dir, best_checkpoint_dir
+
+def set_seed(seed):
+  os.environ['PYTHONHASHSEED'] = str(seed)
+  random.seed(seed)
+  np.random.seed(seed)
+  tf.random.set_seed(seed)
 
 def main(config):
-  # seed everything (not work)
-  os.environ['PYTHONHASHSEED'] = str(config.seed)
-  random.seed(config.seed)
-  np.random.seed(config.seed)
-  tf.random.set_seed(config.seed)
-
   if config.gpu_growth:
     for gpu in tf.config.experimental.list_physical_devices('GPU'):
       tf.config.experimental.set_memory_growth(gpu, True)
   assert config.precision in (16, 32), config.precision
   if config.precision == 16:
     prec.set_policy(prec.Policy('mixed_float16'))
+
   config.steps = int(config.steps)
-  config.logdir.mkdir(parents=True, exist_ok=True)
-  checkpoint_dir = config.logdir / 'checkpoints'
-  checkpoint_dir.mkdir(parents=True, exist_ok=True)
-  best_checkpoint_dir = checkpoint_dir / 'best'
-  best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
+  set_seed(config.seed)
+  config.logdir, datadir, cp_dir, best_cp_dir = create_log_dirs(config)
   write_config_summary(config)
-  print('Logdir', config.logdir)
 
   # Create environments.
-  datadir = config.logdir / 'episodes'
   writer = tf.summary.create_file_writer(
     str(config.logdir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()
@@ -555,7 +563,7 @@ def main(config):
   print(f'Simulating agent for {config.steps - step} steps.')
   agent = Dreamer(config, datadir, actspace, obspace, writer)
   # Resume last checkpoint (checkpoints are `{checkpoint_dir}/{step}.pkl`
-  checkpoints = sorted(checkpoint_dir.glob('*pkl'), key=lambda f: int(f.name.split('.')[0]))
+  checkpoints = sorted(cp_dir.glob('*pkl'), key=lambda f: int(f.name.split('.')[0]))
   if len(checkpoints):
     last_checkpoint = checkpoints[-1]
     agent.load(last_checkpoint)
@@ -574,11 +582,11 @@ def main(config):
     if (cum_reward > best_test_return):
       best_test_return = cum_reward
       for model in [agent._encode, agent._dynamics, agent._decode, agent._reward, agent._actor]:
-        model.save(best_checkpoint_dir / f'{model._name}.pkl')
-      agent.save(best_checkpoint_dir / 'variables.pkl')  # store also the whole model
+        model.save(best_cp_dir / f'{model._name}.pkl')
+      agent.save(best_cp_dir / 'variables.pkl')  # store also the whole model
     # Save regular checkpoint
     step = count_steps(datadir, config)
-    agent.save(checkpoint_dir / f'{step}.pkl')
+    agent.save(cp_dir / f'{step}.pkl')
     # Training phase
     if config.training:
       print('Start collection.')
@@ -602,10 +610,9 @@ if __name__ == '__main__':
     parser.add_argument(f'--{key}', type=tools.args_type(value), default=value)
   args = parser.parse_args()
   if args.multi_test:
-    base_logdir = args.logdir
+    args.logdir = pathlib.Path('logs/experiments')
     for seed in [random.randint(10**8, 10**9 - 1) for _ in range(5)]:
       args.seed = seed
-      args.logdir = base_logdir / f'{seed}'
       main(args)
   else:
     main(args)
