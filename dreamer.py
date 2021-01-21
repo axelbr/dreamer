@@ -103,9 +103,6 @@ def define_config():
   return config
 
 
-best_return_so_far = - np.Inf
-
-
 class Dreamer(tools.Module):
 
   def __init__(self, config, datadir, actspace, obspace, writer):
@@ -419,7 +416,6 @@ def load_dataset(directory, config):
 
 
 def summarize_episode(episodes, config, datadir, writer, prefix):
-  global best_return_so_far
   # note: in multi-agent, each agent produce 1 episode
   episode = episodes[0]  # we summarize w.r.t. the episode of the first agent
   episodes, steps = tools.count_episodes(datadir)
@@ -504,10 +500,8 @@ def create_log_dirs(config):
   logdir = pathlib.Path(f'{config.logdir}/{track}_dreamer_{task}_{config.seed}_{time.time()}')
   datadir = logdir / 'episodes'
   checkpoint_dir = logdir / 'checkpoints'
-  best_checkpoint_dir = checkpoint_dir / 'best'
-  best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
-  best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
-  return logdir, datadir, checkpoint_dir, best_checkpoint_dir
+  checkpoint_dir.mkdir(parents=True, exist_ok=True)
+  return logdir, datadir, checkpoint_dir
 
 def set_seed(seed):
   os.environ['PYTHONHASHSEED'] = str(seed)
@@ -525,7 +519,7 @@ def main(config):
 
   config.steps = int(config.steps)
   set_seed(config.seed)
-  config.logdir, datadir, cp_dir, best_cp_dir = create_log_dirs(config)
+  config.logdir, datadir, cp_dir = create_log_dirs(config)
   write_config_summary(config)
   print('Logdir', config.logdir)
 
@@ -582,8 +576,8 @@ def main(config):
     if (cum_reward > best_test_return):
       best_test_return = cum_reward
       for model in [agent._encode, agent._dynamics, agent._decode, agent._reward, agent._actor]:
-        model.save(best_cp_dir / f'{model._name}.pkl')
-      agent.save(best_cp_dir / 'variables.pkl')  # store also the whole model
+        model.save(cp_dir / 'best' / f'{model._name}.pkl')
+      agent.save(cp_dir / 'best' / 'variables.pkl')  # store also the whole model
     # Save regular checkpoint
     step = count_steps(datadir, config)
     agent.save(cp_dir / f'{step}.pkl')
