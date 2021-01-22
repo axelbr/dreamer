@@ -81,7 +81,7 @@ def define_config():
   # Training.
   config.training = True    # set it to false if you want to evaluate a trained model
   config.batch_size = 50
-  config.batch_length = 100
+  config.batch_length = 50
   config.train_every = 1000
   config.train_steps = 100
   config.pretrain = 100
