@@ -605,7 +605,9 @@ if __name__ == '__main__':
     parser.add_argument(f'--{key}', type=tools.args_type(value), default=value)
   args = parser.parse_args()
   if args.multi_test:
+    base_logdir = args.logdir
     for seed in [random.randint(10**8, 10**9 - 1) for _ in range(5)]:
+      args.logdir = base_logdir
       args.seed = seed
       main(args)
   else:
