@@ -497,7 +497,7 @@ def write_config_summary(config):
 def create_log_dirs(config):
   suite, track = config.task.split('_', 1)
   task = 'max_progress'
-  logdir = pathlib.Path(f'{config.logdir}/{track}_dreamer_{task}_{config.seed}_{time.time()}')
+  logdir = pathlib.Path(f'{config.logdir}/{track}_dreamer_{task}_Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}_{config.seed}_{time.time()}')
   datadir = logdir / 'episodes'
   checkpoint_dir = logdir / 'checkpoints'
   best_checkpoint_dir = checkpoint_dir / 'best'
