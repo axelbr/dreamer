@@ -15,14 +15,19 @@ PALETTE = 10 * (
     '#f781bf', '#888888', '#a6cee3', '#b2df8a', '#cab2d6', '#fb9a99',
     '#fdbf6f')
 
-Run = collections.namedtuple('Run', 'track method seed x y')
+Run = collections.namedtuple('Run', 'logdir track method seed x y')
 
 def process_logdir_name(logdir):
   splitted = logdir.split('_')
   if len(splitted) == 6:    # assume logdir: track_algo_max_progress_seed_timestamp
     track, algo, _, _, seed, _ = splitted
+    seed = int(seed)
   elif len(splitted) == 9:  # assume logdir: track_dreamer_max_progress_ArK_BlL_HH_seed_timestamp
     track, algo, _, _, action_repeat, batch_len, horizon, seed, _ = splitted
+    action_repeat = int(''.join(filter(str.isdigit, action_repeat)))  # keep param value
+    batch_len = int(''.join(filter(str.isdigit, batch_len)))
+    horizon = int(''.join(filter(str.isdigit, horizon)))
+    seed = int(seed)
     algo = f'{algo} (AR{action_repeat}, BL{batch_len}, H{horizon})'
   else:
     raise NotImplementedError(f'cannot parse {logdir}')
@@ -61,9 +66,12 @@ def load_runs(args):
           continue
         y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
         x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
-        runs.append(Run(track, method, seed, x, y))
+        runs.append(Run(filepath, track, method, seed, x, y))
         print(f'Track: {track}, method: {method}, seed: {seed}.')
       except ValueError as err:
+        print(f'Error {file}: {err}')
+        continue
+      except NotImplementedError as err:
         print(f'Error {file}: {err}')
         continue
   return runs
@@ -157,6 +165,25 @@ def plot_mean_min_max(args, runs, axes):
     ax.legend()
 
 
+def aggregate_max(runs):
+  all_x = np.concatenate([r.x for r in runs])
+  all_y = np.concatenate([r.y for r in runs])
+  all_logs = np.concatenate([[r.logdir for _ in r.y] for r in runs])
+  order = np.argsort(all_y)
+  all_x, all_y, all_logs = all_x[order], all_y[order], all_logs[order]
+  return all_x, all_y, all_logs
+
+def get_best_performing_models(args, runs, n_models=5):
+  tracks = sorted(set([r.track for r in runs]))
+  print("\nBest models per track")
+  for i, track in enumerate(tracks):
+    filter_runs = [r for r in runs if r.track == track]
+    sorted_x, sorted_y, sorted_logs = aggregate_max(filter_runs)
+    for x, y, log in zip(sorted_x[-n_models:], sorted_y[-n_models:], sorted_logs[-n_models:]):
+      print(f'Track: {track}, {args.ylabel}: {y}, {args.xlabel}: {x}, Logdir: {log}')
+    print()
+
+
 def main(args):
   runs = load_runs(args)
   tracks = sorted(set([r.track for r in runs]))
@@ -168,6 +195,7 @@ def main(args):
   filename = args.outdir / f'curves_{timestamp}.png'
   fig.tight_layout(pad=1.0)
   fig.savefig(filename)
+  get_best_performing_models(args, runs, n_models=5)
 
 def parse():
   parser = argparse.ArgumentParser()
