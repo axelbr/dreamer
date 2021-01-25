@@ -17,6 +17,22 @@ PALETTE = 10 * (
 
 Run = collections.namedtuple('Run', 'track method seed x y')
 
+def process_logdir_name(logdir):
+  # assume logdir: track_algo_task_seed_timestamp
+  splitted = logdir.split('_')
+  assert len(splitted) == 6
+  track, algo, _, task, seed, _ = splitted
+  return track, algo, seed
+
+def process_filepath(path_list):
+  if len(path_list) == 2:   # e.g. AR8/austria_dreamer_max_progress_seed_timestamp
+    param, logdir = path_list
+    track, method, seed = process_logdir_name(logdir)
+    method = method + ' ' + param
+  else:
+    NotImplementedError(f'processing not defined for {path_list}')
+  return track, method, seed
+
 def load_runs(args):
   runs = []
   for dir in args.indir:
@@ -24,7 +40,8 @@ def load_runs(args):
     files = list(dir.glob('**/events*'))
     for file in files:
       try:
-        track, method, seed = file.relative_to(dir).parts[:-1]  # path to jsonl file, e.g. columbia/h20/seed
+        filepath = file.relative_to(dir).parts[:-1]  # path to jsonl file, e.g. columbia/h20/seed
+        track, method, seed = process_filepath(filepath)
         if not track in args.tracks:
           continue
         event_acc = EventAccumulator(str(file), size_guidance={'tensors': 1000})  # max number of items to keep
@@ -35,11 +52,8 @@ def load_runs(args):
           tag = 'sim/' + args.yaxis
         else:
           continue
-        yy = [float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)]
-        xx = [tensor.step for tensor in event_acc.Tensors(tag)]
-        df = pd.DataFrame(list(zip(xx, yy)), columns=[args.xaxis, args.yaxis])
-        x = df[args.xaxis].to_numpy()
-        y = df[args.yaxis].to_numpy()
+        y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
+        x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
         runs.append(Run(track, method, seed, x, y))
         print(f'Track: {track}, method: {method}, seed: {seed}.')
       except ValueError as err:
