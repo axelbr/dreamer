@@ -18,19 +18,26 @@ PALETTE = 10 * (
 Run = collections.namedtuple('Run', 'track method seed x y')
 
 def process_logdir_name(logdir):
-  # assume logdir: track_algo_task_seed_timestamp
   splitted = logdir.split('_')
-  assert len(splitted) == 6
-  track, algo, _, task, seed, _ = splitted
+  if len(splitted) == 6:    # assume logdir: track_algo_max_progress_seed_timestamp
+    track, algo, _, _, seed, _ = splitted
+  elif len(splitted) == 9:  # assume logdir: track_dreamer_max_progress_ArK_BlL_HH_seed_timestamp
+    track, algo, _, _, action_repeat, batch_len, horizon, seed, _ = splitted
+    algo = f'{algo} (AR{action_repeat}, BL{batch_len}, H{horizon})'
+  else:
+    raise NotImplementedError(f'cannot parse {logdir}')
   return track, algo, seed
 
 def process_filepath(path_list):
-  if len(path_list) == 2:   # e.g. AR8/austria_dreamer_max_progress_seed_timestamp
+  if len(path_list) == 1:     # e.g. austria_dreamer_max_progress_seed_timestamp
+    logdir = path_list[0]
+    track, method, seed = process_logdir_name(logdir)
+  elif len(path_list) == 2:   # e.g. AR8/austria_dreamer_max_progress_seed_timestamp
     param, logdir = path_list
     track, method, seed = process_logdir_name(logdir)
     method = method + ' ' + param
   else:
-    NotImplementedError(f'processing not defined for {path_list}')
+    raise NotImplementedError(f'processing not defined for {path_list}')
   return track, method, seed
 
 def load_runs(args):
