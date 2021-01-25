@@ -10,32 +10,27 @@ import math
 import string
 import random
 import imageio
-
-import matplotlib.pyplot as plt
-import tensorflow as tf
-from agents.gap_follower import GapFollower
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['MUJOCO_GL'] = 'egl'
-
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras.mixed_precision import experimental as prec
-
-tf.get_logger().setLevel('ERROR')
-
-from tensorflow_probability import distributions as tfd
-
-sys.path.append(str(pathlib.Path(__file__).parent))
-
+import logging
 import models
 import tools
 import wrappers
 from datetime import datetime
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from agents.gap_follower import GapFollower
 
+
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.mixed_precision import experimental as prec
+from tensorflow_probability import distributions as tfd
+
+tf.get_logger().setLevel('ERROR')
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['MUJOCO_GL'] = 'egl'
+sys.path.append(str(pathlib.Path(__file__).parent))
 
 #tf.config.run_functions_eagerly(run_eagerly=True)
-
 
 def define_config():
   config = tools.AttrDict()
@@ -486,6 +481,14 @@ def make_base_env(config, gui=False):
   return env
 
 
+def set_logging(config):
+  level = logging.WARNING
+  logging.basicConfig(level=level, format='%(asctime)s:%(levelname)s:%(name)s:%(message)s',
+                      filename=f"{config.logdir}/stderr.txt", filemode='a')
+  stderr_logger = logging.getLogger('STDERR')
+  sl = tools.StreamToLogger(stderr_logger, level)
+  sys.stderr = sl
+
 def write_config_summary(config):
   from datetime import datetime
   text = f'created at {datetime.now().strftime("%m-%d-%Y %H:%M:%S")}\n\n'
@@ -522,6 +525,7 @@ def main(config):
   set_seed(config.seed)
   config.logdir, datadir, cp_dir = create_log_dirs(config)
   write_config_summary(config)
+  set_logging(config)
   print('Logdir', config.logdir)
 
   # Create environments.

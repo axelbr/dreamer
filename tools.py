@@ -15,6 +15,7 @@ import tensorflow_probability as tfp
 from tensorflow.keras.mixed_precision import experimental as prec
 from tensorflow_probability import distributions as tfd
 import tfplot
+import logging
 
 class AttrDict(dict):
 
@@ -472,6 +473,21 @@ class Adam(tf.Module):
       if re.search(self._wdpattern, self._name + '/' + var.name):
         print('- ' + self._name + '/' + var.name)
         strategy.extended.update(var, lambda var: self._wd * var)
+
+
+class StreamToLogger(object):
+  """
+  Fake file-like stream object that redirects writes to a logger instance.
+  """
+
+  def __init__(self, logger, log_level=logging.INFO):
+    self.logger = logger
+    self.log_level = log_level
+    self.linebuf = ''
+
+  def write(self, buf):
+    for line in buf.rstrip().splitlines():
+      self.logger.log(self.log_level, line.rstrip())
 
 
 def args_type(default):
