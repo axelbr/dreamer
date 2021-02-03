@@ -1,5 +1,6 @@
 import datetime
 import io
+import json
 import math
 import pathlib
 import pickle
@@ -188,15 +189,20 @@ def encode_gif(frames, fps):
   return out
 
 
-def simulate(agents, env, steps=0, episodes=0, sim_state=None, agents_ids=['A']):
+def simulate(agents, env, config, datadir, writer, prefix='train', steps=0, episodes=0, sim_state=None, agents_ids=['A']):
   n_agents = len(agents_ids)
+  # these are used to collect statistic of the first agent only
+  cum_reward = 0.0          # episode level
+  episode_progresses = []   # episode level
+  max_progresses = []       # collection level
+  cum_rewards = []          # collection level
+  id = agents_ids[0]        # the agent w.r.t. we collect statistics
   # Initialize or unpack simulation state.
   if sim_state is None:
     step, episode = 0, 0
     dones = {id: True for id in agents_ids}
     length = np.zeros(n_agents, np.int32)
     obs = {id: None for id in agents_ids}
-    cum_reward = {id: 0.0 for id in agents_ids}
     agent_states = {id: None for id in agents_ids}
   else:
     step, episode, dones, length, obs, agent_states = sim_state
@@ -205,7 +211,10 @@ def simulate(agents, env, steps=0, episodes=0, sim_state=None, agents_ids=['A'])
     # Reset envs if necessary.
     if any(dones.values()):
       obs = env.reset()
-      cum_reward = {id: 0.0 for id in agents_ids}
+      if len(episode_progresses) > 0:    # at least 1 episode
+        max_progresses.append(max(episode_progresses))
+        cum_rewards.append(cum_reward)
+      cum_reward = 0.0
     # Step agents.
     obs = {id: {k: np.stack([v]) for k, v in o.items()} for id, o in obs.items()}
     actions = dict()
@@ -214,16 +223,33 @@ def simulate(agents, env, steps=0, episodes=0, sim_state=None, agents_ids=['A'])
       actions[id] = np.array(actions[id][0])
     assert len(actions) == len(agents_ids)
     # Step envs.
-    obs, rewards, dones, _ = env.step(actions)
-    cum_reward = {id: cum_reward[id] + rewards[id] for id in agents_ids}
+    obs, rewards, dones, infos = env.step(actions)
+    # update episode-level information
+    cum_reward = cum_reward + rewards[id]
+    episode_progresses.append(infos[id]['lap'] + infos[id]['progress'] - 1)
     done = any(dones.values())
     episode += int(done)
     length += 1                         # episode length until termination
     step += (int(done) * length).sum()  # num sim steps
     length *= (1 - done)
+  # when the loop is over, write statistics for the 1st agent
+  metrics_dict = {'progress': max_progresses,
+                  'return': cum_rewards}
+  summarize_collection(metrics_dict, config, datadir, writer, prefix)
   # Return new state to allow resuming the simulation.
-  return (step - steps, episode - episodes, dones, length, obs, agent_states), cum_reward['A']
+  return (step - steps, episode - episodes, dones, length, obs, agent_states), cum_reward
 
+
+def summarize_collection(metrics_dict, config, datadir, writer, prefix):
+  for metric_name, metric_list in metrics_dict.items():
+    metrics = [(f'{prefix}/{metric_name}_mean', np.mean(metric_list)),
+               (f'{prefix}/{metric_name}_std', np.std(metric_list))]
+    step = count_episodes(datadir)[1] * config.action_repeat
+    with (config.logdir / 'metrics.jsonl').open('a') as f:
+      f.write(json.dumps(dict([('step', step)] + metrics)) + '\n')
+    with writer.as_default():  # Env might run in a different thread.
+      tf.summary.experimental.set_step(step)
+      [tf.summary.scalar(k, v) for k, v in metrics]
 
 def count_episodes(directory):
   filenames = directory.glob('*.npz')

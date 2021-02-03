@@ -11,20 +11,25 @@ from PIL import Image
 
 envs = {}
 
-
-class RaceCarWrapper:
-  def __init__(self, track, id, rendering=False):
+class RaceCarBaseEnv():
+  def __init__(self, track, rendering=False):
     from racecar_gym.envs.multi_agent_race import MultiAgentScenario, MultiAgentRaceEnv
-    from racecar_gym.tasks import register_task
-    from racecar_gym.tasks.progress_based import MaximizeProgressTask, MaximizeProgressMaskObstacleTask
     env_id = track
     if env_id not in envs.keys():
-      register_task("maximize_progress", MaximizeProgressTask)
-      register_task("maximize_progress_obstacle", MaximizeProgressMaskObstacleTask)
       scenario = MultiAgentScenario.from_spec(f"scenarios/{track}.yml", rendering=rendering)
       envs[env_id] = MultiAgentRaceEnv(scenario=scenario)
     self._env = envs[env_id]
-    self._id = id     # main agent id, for rendering?
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
+class RaceCarWrapper:
+  def __init__(self, env, id='A'):
+    self._env = env
+    self._id = id     # main agent id
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
 
   @property
   def agent_ids(self):
@@ -53,7 +58,7 @@ class RaceCarWrapper:
     for id, act in self._env.action_space.spaces.items():
       flat_action_space[id] = gym.spaces.Box(np.append(act['motor'].low, action_space[self._id]['steering'].low),
                                              np.append(act['motor'].high, action_space[self._id]['steering'].high))
-    return flat_action_space
+    return gym.spaces.Dict(flat_action_space)
 
   def step(self, actions):
     actions = {i: {'motor': actions[i][0], 'steering': actions[i][1]} for i in self.agent_ids}
@@ -150,15 +155,17 @@ class TimeLimit:
 
 class Render:
 
-  def __init__(self, env, callbacks=None):
+  def __init__(self, env, callbacks=None, follow_view=True):
     self._env = env
     self._callbacks = callbacks or ()
+    self._follow_view = follow_view
     self._reset_videos_dict()
 
   def _reset_videos_dict(self):
     self._videos = {'birds_eye-A': []}
-    for agent_id in self._env.agent_ids:
-      self._videos[f'follow-{agent_id}'] = []
+    if self._follow_view:
+      for agent_id in self._env.agent_ids:
+        self._videos[f'follow-{agent_id}'] = []
 
   def __getattr__(self, name):
     return getattr(self._env, name)
@@ -203,6 +210,7 @@ class Collect:
       transition[id]['reward'] = reward[id]
       transition[id]['discount'] = info.get('discount', np.array(1 - float(dones[id])))
       transition[id]['progress'] = info[id]['lap'] + info[id]['progress'] - 1   # because lap starts at 1
+      transition[id]['time'] = info[id]['time']
       self._episodes[i].append(transition[id])
     if any(dones.values()):
       episodes = [{k: [t[k] for t in episode] for k in episode[0]} for episode in self._episodes]
@@ -219,6 +227,7 @@ class Collect:
       transition[id]['reward'] = 0.0
       transition[id]['discount'] = 1.0
       transition[id]['progress'] = -1.0
+      transition[id]['time'] = 0.0
       self._episodes[i] = [transition[id]]
     return obs
 

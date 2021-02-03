@@ -50,6 +50,7 @@ def define_config():
   # Environment.
   config.task = 'racecar_austria'
   config.action_repeat = 4
+  config.eval_episodes = 5
   config.time_limit_train = 2000
   config.time_limit_test = 4000
   config.prefill_agent = 'gap_follower'
@@ -76,7 +77,7 @@ def define_config():
   # Training.
   config.training = True    # set it to false if you want to evaluate a trained model
   config.batch_size = 50
-  config.batch_length = 100
+  config.batch_length = 50
   config.train_every = 1000
   config.train_steps = 100
   config.pretrain = 100
@@ -88,7 +89,7 @@ def define_config():
   # Behavior.
   config.discount = 0.99
   config.disclam = 0.95
-  config.horizon = 50
+  config.horizon = 15
   config.action_dist = 'tanh_normal'
   config.action_init_std = 5.0
   config.expl = 'additive_gaussian'
@@ -410,9 +411,9 @@ def load_dataset(directory, config):
   return dataset
 
 
-def summarize_episode(episodes, config, datadir, writer, prefix):
+def summarize_episode(episode_list, config, datadir, writer, prefix):
   # note: in multi-agent, each agent produce 1 episode
-  episode = episodes[0]  # we summarize w.r.t. the episode of the first agent
+  episode = episode_list[0]  # we summarize w.r.t. the episode of the first agent
   episodes, steps = tools.count_episodes(datadir)
   episode_len = len(episode['reward']) - 1
   length = episode_len * config.action_repeat
@@ -431,6 +432,8 @@ def summarize_episode(episodes, config, datadir, writer, prefix):
     [tf.summary.scalar(k, v) for k, v in metrics]
 
 
+
+
 def save_videos(videos, config, datadir):
   if not config.log_videos:
     return
@@ -438,7 +441,7 @@ def save_videos(videos, config, datadir):
   video_dir = config.logdir / 'videos'
   video_dir.mkdir(parents=True, exist_ok=True)
   for filename, video in videos.items():
-    writer = imageio.get_writer(f'{video_dir}/{filename}_{step}.mp4', fps=100 // config.action_repeat)
+    writer = imageio.get_writer(f'{video_dir}/{filename}_{step}_{time.time()}.mp4', fps=100 // config.action_repeat)
     for image in video:
       writer.append_data(image)
     writer.close()
@@ -475,7 +478,8 @@ def make_test_env(config, writer, datadir, gui=False):
 
 def make_base_env(config, gui=False):
   suite, track = config.task.split('_', 1)
-  env = wrappers.RaceCarWrapper(track=track, id='A', rendering=gui)
+  env = wrappers.RaceCarBaseEnv(track=track, rendering=gui)
+  env = wrappers.RaceCarWrapper(env, id='A')
   env = wrappers.ActionRepeat(env, config.action_repeat)
   env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
   return env
@@ -548,19 +552,22 @@ def main(config):
   if config.prefill_agent == 'random':
     id = agent_ids[0]
     random_agent = lambda o, d, s: ([train_env.action_space[id].sample()], None)  # note: it must work as single_agent agent
-    tools.simulate([random_agent for _ in range(train_env.n_agents)], train_env, prefill / config.action_repeat, agents_ids=agent_ids)
+    agents = [random_agent for _ in range(train_env.n_agents)]
   elif config.prefill_agent == 'gap_follower':
     gapfollower = GapFollower()
     gap_follower_agent = lambda o, d, s: ([gapfollower.action(o)], None)
-    tools.simulate([gap_follower_agent for _ in range(train_env.n_agents)], train_env, prefill / config.action_repeat, agents_ids=agent_ids)
+    agents = [gap_follower_agent for _ in range(train_env.n_agents)]
   else:
     raise NotImplementedError(f'prefill agent {config.prefill_agent} not implemented')
+  tools.simulate(agents, train_env, config, datadir, writer, prefix='prefill',
+                 steps=prefill / config.action_repeat, agents_ids=agent_ids)
   writer.flush()
 
   # Train and regularly evaluate the agent.
   step = count_steps(datadir, config)
   print(f'Simulating agent for {config.steps - step} steps.')
   agent = Dreamer(config, datadir, actspace, obspace, writer)
+  print(f"[Info] Agent Variables: {len(agent.variables)}")
   # Resume last checkpoint (checkpoints are `{checkpoint_dir}/{step}.pkl`
   checkpoints = sorted(cp_dir.glob('*pkl'), key=lambda f: int(f.name.split('.')[0]))
   if len(checkpoints):
@@ -574,8 +581,9 @@ def main(config):
     # Evaluation phase
     print('Start evaluation.')
     eval_agent = functools.partial(agent, training=False)
-    _, cum_reward = tools.simulate([eval_agent for _ in range(train_env.n_agents)], test_env,
-                                   episodes=1, agents_ids=agent_ids)
+    eval_agents = [eval_agent for _ in range(train_env.n_agents)]   # for multi-agent compatibility
+    _, cum_reward = tools.simulate(eval_agents, test_env, config, datadir, writer, prefix='test',
+                                   episodes=config.eval_episodes, agents_ids=agent_ids)
     writer.flush()
     # Save best model
     if (cum_reward > best_test_return):
@@ -592,8 +600,9 @@ def main(config):
       steps = config.eval_every // config.action_repeat
       train_agent = functools.partial(agent, training=True)
       eval_agent = functools.partial(agent, training=False)
-      simulation_state, _ = tools.simulate([train_agent] + [eval_agent for _ in range(train_env.n_agents - 1)],
-                                           train_env, steps, sim_state=simulation_state, agents_ids=agent_ids)
+      training_agents = [train_agent] + [eval_agent for _ in range(train_env.n_agents - 1)]
+      simulation_state, _ = tools.simulate(training_agents, train_env, config, datadir, writer, prefix='train',
+                                           steps=steps, sim_state=simulation_state, agents_ids=agent_ids)
       step = count_steps(datadir, config)
 
 
