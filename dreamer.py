@@ -567,7 +567,6 @@ def main(config):
   step = count_steps(datadir, config)
   print(f'Simulating agent for {config.steps - step} steps.')
   agent = Dreamer(config, datadir, actspace, obspace, writer)
-  print(f"[Info] Agent Variables: {len(agent.variables)}")
   # Resume last checkpoint (checkpoints are `{checkpoint_dir}/{step}.pkl`
   checkpoints = sorted(cp_dir.glob('*pkl'), key=lambda f: int(f.name.split('.')[0]))
   if len(checkpoints):
