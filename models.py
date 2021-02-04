@@ -153,11 +153,11 @@ class MLPLidarDecoder(tools.Module):
     x = tf.reshape(features, shape=(-1, *features.shape[2:]))
     x = self.get('dense1', tfkl.Dense, units=2*self._depth, activation=None)(x)
     x = self.get('dense2', tfkl.Dense, units=4*self._depth, activation=self._act)(x)
-    x = self.get('dense3', tfkl.Dense, units=2 * self._shape[0], activation=self._act)(x)
-    mean, std = tf.split(x, 2, -1)
-    std = tf.nn.softplus(std)
-    dist = tfd.Independent(tfd.Normal(mean, std), len(self._shape))
-    return tfd.BatchReshape(dist, batch_shape=features.shape[:2])
+    params = tfpl.IndependentNormal.params_size(self._shape[0])
+    x = self.get('params', tfkl.Dense, units=params, activation=tf.nn.leaky_relu)(x)
+    x = self.get('dist', tfpl.IndependentNormal, event_shape=self._shape[0])(x)
+    dist = tfd.BatchReshape(x, batch_shape=features.shape[:2])
+    return dist
 
 
 
