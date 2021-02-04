@@ -152,7 +152,7 @@ class MLPLidarDecoder(tools.Module):
     # note: features = tf.concat([state['stoch'], state['deter']], -1)])
     x = self.get('dense1', tfkl.Dense, units=2 * self._depth, activation=None)(features)
     x = self.get('dense2', tfkl.Dense, units=4 * self._depth, activation=self._act)(x)
-    mean = self.get('means', tfkl.Dense, units=self._shape[0], activation=None)(x)
+    mean = self.get('means', tfkl.Dense, units=self._shape[0], activation=self._act)(x)
     return tfd.Independent(tfd.Normal(mean, 1), len(self._shape))
 
 class LidarDecoder(tools.Module):
