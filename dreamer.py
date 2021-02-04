@@ -423,6 +423,10 @@ def summarize_episode(episode_list, config, datadir, writer, prefix):
     (f'{prefix}/return', float(episode['reward'].sum())),
     (f'{prefix}/length', len(episode['reward']) - 1),
     (f'{prefix}/progress', float(max(episode['progress']))),
+    (f'actions/{prefix}/motor_mean', np.mean(episode['action']['motor'])),
+    (f'actions/{prefix}/motor_std', np.std(episode['action']['motor'])),
+    (f'actions/{prefix}/steering_mean', np.mean(episode['action']['steering'])),
+    (f'actions/{prefix}/steering_std', np.std(episode['action']['steering'])),
     (f'episodes', episodes)]
   step = count_steps(datadir, config)
   with (config.logdir / 'metrics.jsonl').open('a') as f:

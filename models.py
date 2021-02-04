@@ -262,7 +262,8 @@ class ActionDecoder(tools.Module):
       # https://www.desmos.com/calculator/rcmcf5jwe7
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
       mean, std = tf.split(x, 2, -1)
-      std = tf.nn.softplus(std) + self._min_std
+      mean = self._mean_scale * tf.tanh(mean / self._mean_scale)
+      std = tf.nn.softplus(std + raw_init_std) + self._min_std
       dist = tfd.Normal(mean, std)
       dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
       dist = tfd.Independent(dist, 1)
