@@ -257,6 +257,7 @@ class ActionDecoder(tools.Module):
     self._mean_scale = mean_scale
 
   def __call__(self, features):
+    raw_init_std = np.log(np.exp(self._init_std) - 1)
     x = features
     for index in range(self._layers):
       x = self.get(f'h{index}', tfkl.Dense, self._units, self._act)(x)
@@ -264,9 +265,14 @@ class ActionDecoder(tools.Module):
       # https://www.desmos.com/calculator/rcmcf5jwe7
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
       mean, std = tf.split(x, 2, -1)
+      mean = self._mean_scale * tf.tanh(mean / self._mean_scale)
+      std = tf.nn.softplus(std + raw_init_std) + self._min_std
       mean = tf.tanh(mean)
       std = tf.nn.softplus(std) + self._min_std
       dist = tfd.Normal(mean, std)
+      dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
+      dist = tfd.Independent(dist, 1)
+      dist = tools.SampleDist(dist)
     elif self._dist == 'onehot':
       x = self.get(f'hout', tfkl.Dense, self._size)(x)
       dist = tools.OneHotDist(x)
