@@ -246,6 +246,9 @@ class Dreamer(tools.Module):
     elif self._c.obs_type == 'lidar':
       self._encode = models.IdentityEncoder()
       self._decode = models.MLPLidarDecoder(self._c.cnn_depth, self._obspace['lidar'].shape)
+    elif self._c.obs_type == 'lidar_occupancy':
+      self._encode = models.IdentityEncoder()
+      self._decode = models.LidarDecoder()
     self._dynamics = models.RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
 
     self._reward = models.DenseDecoder((), 2, self._c.num_units, dist=self._c.reward_out_dist, act=act)
@@ -351,6 +354,19 @@ class Dreamer(tools.Module):
       model_img = tools.lidar_to_image(model)
       error = model_img - truth_img
       openl = tf.concat([truth_img, model_img, error], 2)
+    elif self._c.obs_type == 'lidar_occupancy':
+      truth = data['lidar_occupancy'][:summary_size] + 0.5
+      recon = image_pred.mode()[:summary_size]
+      recon = tf.cast(recon, tf.float32)    # concatenation requires same type
+      init, _ = self._dynamics.observe(embed[:summary_size, :summary_length],
+                                       data['action'][:summary_size, :summary_length])
+      init = {k: v[:, -1] for k, v in init.items()}
+      prior = self._dynamics.imagine(data['action'][:summary_size, summary_length:], init)
+      openl = self._decode(self._dynamics.get_feat(prior)).mode()
+      openl = tf.cast(openl, tf.float32)
+      model = tf.concat([recon[:, :summary_length], openl], 1)    # note: recon/openl is already 0 or 1, no need scaling
+      error = (model - truth + 1) / 2
+      openl = tf.concat([truth, model, error], 2)
     tools.graph_summary(self._writer, tools.video_summary,
                         'agent/train/autoencoder', openl, self._step, int(100 / self._c.action_repeat))
 
@@ -391,6 +407,7 @@ def preprocess(obs, config):
     if 'image' in obs:
       obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
     obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
+    obs['lidar_occupancy'] = tf.cast(obs['lidar_occupancy'], dtype) - 0.5     # scale to mean=0
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
                         clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[
       config.clip_rewards]

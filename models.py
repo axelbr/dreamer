@@ -164,18 +164,22 @@ class MLPLidarDecoder(tools.Module):
 
 class LidarDecoder(tools.Module):
 
-  def __init__(self, output_dim, act=tf.nn.relu):
+  def __init__(self, act=tf.nn.relu, shape=(32, 32, 1), depth=8):
     self._name = "decoder"
     self._act = act
-    self._output_dim = output_dim
+    self._depth = depth
+    self._shape = shape
 
   def __call__(self, features):
-    params = tfpl.IndependentNormal.params_size(self._output_dim[0])
-    x = tf.reshape(features, shape=(-1, *features.shape[2:]))
-    x = self.get('params', tfkl.Dense, params, activation=self._act)(x)
-    x = self.get('dist', tfpl.IndependentNormal, event_shape=self._output_dim[0])(x)
-    dist = tfd.BatchReshape(x, batch_shape=features.shape[:2])
-    return dist
+    kwargs = dict(strides=2, activation=self._act)
+    x = self.get('h1', tfkl.Dense, 8 * self._depth, None)(features)
+    x = tf.reshape(x, [-1, 1, 1, 8*8])
+    x = self.get('h2', tfkl.Conv2DTranspose, 4 * self._depth, 5, **kwargs)(x)
+    x = self.get('h3', tfkl.Conv2DTranspose, 2 * self._depth, 6, **kwargs)(x)
+    x = self.get('h4', tfkl.Conv2DTranspose, 1, 6, **kwargs)(x)
+    shape = tf.concat([tf.shape(features)[:-1], self._shape], axis=0)
+    x = tf.reshape(x, shape)
+    return tfd.Independent(tfd.Bernoulli(x), 2)
 
 
 class ConvEncoder(tools.Module):

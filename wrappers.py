@@ -192,11 +192,12 @@ class Render:
 
 class Collect:
 
-  def __init__(self, env, callbacks=None, precision=32):
+  def __init__(self, env, callbacks=None, precision=32, occupancy_shape=(32, 32, 1)):
     self._env = env
     self._callbacks = callbacks or ()
     self._precision = precision
     self._episodes = [None for _ in env.agent_ids]      # in multi-agent: store 1 episode for each agent
+    self._occupancy_shape = occupancy_shape
 
   def __getattr__(self, name):
     return getattr(self._env, name)
@@ -211,6 +212,7 @@ class Collect:
       transition[id]['discount'] = info.get('discount', np.array(1 - float(dones[id])))
       transition[id]['progress'] = info[id]['lap'] + info[id]['progress'] - 1   # because lap starts at 1
       transition[id]['time'] = info[id]['time']
+      transition[id]['lidar_occupancy'] = info[id]['close_occupancy']
       self._episodes[i].append(transition[id])
     if any(dones.values()):
       episodes = [{k: [t[k] for t in episode] for k in episode[0]} for episode in self._episodes]
@@ -227,6 +229,7 @@ class Collect:
       transition[id]['reward'] = 0.0
       transition[id]['discount'] = 1.0
       transition[id]['progress'] = -1.0
+      transition[id]['lidar_occupancy'] = np.zeros(self._occupancy_shape, dtype=np.uint8)
       transition[id]['time'] = 0.0
       self._episodes[i] = [transition[id]]
     return obs
