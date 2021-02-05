@@ -30,7 +30,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['MUJOCO_GL'] = 'egl'
 sys.path.append(str(pathlib.Path(__file__).parent))
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
   config = tools.AttrDict()
@@ -407,7 +407,7 @@ def preprocess(obs, config):
     if 'image' in obs:
       obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
     obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
-    obs['lidar_occupancy'] = tf.cast(obs['lidar_occupancy'], dtype) - 0.5     # scale to mean=0
+    obs['lidar_occupancy'] = tf.cast(obs['lidar_occupancy'], dtype)     # no scale because bernoulli is in 0,1
     clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
                         clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[
       config.clip_rewards]
