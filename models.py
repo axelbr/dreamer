@@ -179,7 +179,7 @@ class LidarDecoder(tools.Module):
     x = self.get('h4', tfkl.Conv2DTranspose, 1, 6, **kwargs)(x)
     shape = tf.concat([tf.shape(features)[:-1], self._shape], axis=0)
     x = tf.reshape(x, shape)
-    return tfd.Independent(tfd.Bernoulli(x), 2)
+    return tfd.Independent(tfd.Bernoulli(x), 3)   # last 3 dimensions (row, col, chan) define 1 pixel
 
 
 class ConvEncoder(tools.Module):
