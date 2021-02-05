@@ -192,7 +192,7 @@ class Render:
 
 class Collect:
 
-  def __init__(self, env, callbacks=None, precision=32, occupancy_shape=(32, 32, 1)):
+  def __init__(self, env, callbacks=None, precision=32, occupancy_shape=(64, 64, 1)):
     self._env = env
     self._callbacks = callbacks or ()
     self._precision = precision

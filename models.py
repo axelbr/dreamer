@@ -164,7 +164,8 @@ class MLPLidarDecoder(tools.Module):
 
 class LidarDecoder(tools.Module):
 
-  def __init__(self, act=tf.nn.relu, shape=(32, 32, 1), depth=8):
+  def __init__(self, act=tf.nn.relu, shape=(64, 64, 1), depth=8):
+    # it reconstruct the occupancy map of the surrounding area as binary img of size (64,64,1)
     self._name = "decoder"
     self._act = act
     self._depth = depth
@@ -173,10 +174,11 @@ class LidarDecoder(tools.Module):
   def __call__(self, features):
     kwargs = dict(strides=2, activation=self._act)
     x = self.get('h1', tfkl.Dense, 8 * self._depth, None)(features)
-    x = tf.reshape(x, [-1, 1, 1, 8*8])
+    x = tf.reshape(x, [-1, 1, 1, 8 * self._depth])
     x = self.get('h2', tfkl.Conv2DTranspose, 4 * self._depth, 5, **kwargs)(x)
-    x = self.get('h3', tfkl.Conv2DTranspose, 2 * self._depth, 6, **kwargs)(x)
-    x = self.get('h4', tfkl.Conv2DTranspose, 1, 6, **kwargs)(x)
+    x = self.get('h3', tfkl.Conv2DTranspose, 2 * self._depth, 5, **kwargs)(x)
+    x = self.get('h4', tfkl.Conv2DTranspose, 1 * self._depth, 6, **kwargs)(x)
+    x = self.get('h5', tfkl.Conv2DTranspose, 1, 6, **kwargs)(x)
     shape = tf.concat([tf.shape(features)[:-1], self._shape], axis=0)
     x = tf.reshape(x, shape)
     return tfd.Independent(tfd.Bernoulli(x), 3)   # last 3 dimensions (row, col, chan) define 1 pixel
