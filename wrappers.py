@@ -12,11 +12,11 @@ from PIL import Image
 envs = {}
 
 class RaceCarBaseEnv():
-  def __init__(self, track, rendering=False):
+  def __init__(self, track, task, rendering=False):
     from racecar_gym.envs.multi_agent_race import MultiAgentScenario, MultiAgentRaceEnv
     env_id = track
     if env_id not in envs.keys():
-      scenario = MultiAgentScenario.from_spec(f"scenarios/{track}.yml", rendering=rendering)
+      scenario = MultiAgentScenario.from_spec(f"scenarios/{task}/{track}.yml", rendering=rendering)
       envs[env_id] = MultiAgentRaceEnv(scenario=scenario)
     self._env = envs[env_id]
 

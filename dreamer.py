@@ -48,7 +48,8 @@ def define_config():
   config.precision = 32
   config.obs_type = 'lidar'
   # Environment.
-  config.task = 'racecar_austria'
+  config.track = 'austria'
+  config.task = 'max_progress'
   config.action_repeat = 4
   config.eval_episodes = 5
   config.time_limit_train = 2000
@@ -479,8 +480,7 @@ def make_test_env(config, writer, datadir, gui=False):
 
 
 def make_base_env(config, gui=False):
-  suite, track = config.task.split('_', 1)
-  env = wrappers.RaceCarBaseEnv(track=track, rendering=gui)
+  env = wrappers.RaceCarBaseEnv(track=config.track, task=config.task, rendering=gui)
   env = wrappers.RaceCarWrapper(env, id='A')
   env = wrappers.ActionRepeat(env, config.action_repeat)
   env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
@@ -504,9 +504,7 @@ def write_config_summary(config):
     f.write(text)
 
 def create_log_dirs(config):
-  suite, track = config.task.split('_', 1)
-  task = 'max_progress'
-  logdir = pathlib.Path(f'{config.logdir}/{track}_dreamer_{task}_Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}_{config.seed}_{time.time()}')
+  logdir = pathlib.Path(f'{config.logdir}/{config.track}_dreamer_{config.task}_Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}_{config.seed}_{time.time()}')
   datadir = logdir / 'episodes'
   checkpoint_dir = logdir / 'checkpoints'
   best_checkpoint_dir = checkpoint_dir / 'best'
@@ -531,7 +529,7 @@ def main(config):
   set_seed(config.seed)
   config.logdir, datadir, cp_dir = create_log_dirs(config)
   write_config_summary(config)
-  set_logging(config)
+  #set_logging(config)
   print('Logdir', config.logdir)
 
   # Create environments.
