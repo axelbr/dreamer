@@ -355,7 +355,7 @@ class Dreamer(tools.Module):
       error = model_img - truth_img
       openl = tf.concat([truth_img, model_img, error], 2)
     elif self._c.obs_type == 'lidar_occupancy':
-      truth = data['lidar_occupancy'][:summary_size] + 0.5
+      truth = data['lidar_occupancy'][:summary_size]
       recon = image_pred.mode()[:summary_size]
       recon = tf.cast(recon, tf.float32)    # concatenation requires same type
       init, _ = self._dynamics.observe(embed[:summary_size, :summary_length],
