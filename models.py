@@ -273,8 +273,6 @@ class ActionDecoder(tools.Module):
       mean, std = tf.split(x, 2, -1)
       mean = self._mean_scale * tf.tanh(mean / self._mean_scale)
       std = tf.nn.softplus(std + raw_init_std) + self._min_std
-      mean = tf.tanh(mean)
-      std = tf.nn.softplus(std) + self._min_std
       dist = tfd.Normal(mean, std)
       dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
       dist = tfd.Independent(dist, 1)
