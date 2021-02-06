@@ -237,7 +237,7 @@ def simulate(agents, env, config, datadir, writer, prefix='train', steps=0, epis
                   'return': cum_rewards}
   summarize_collection(metrics_dict, config, datadir, writer, prefix)
   # Return new state to allow resuming the simulation.
-  return (step - steps, episode - episodes, dones, length, obs, agent_states), cum_reward
+  return (step - steps, episode - episodes, dones, length, obs, agent_states), np.mean(cum_rewards)
 
 
 def summarize_collection(metrics_dict, config, datadir, writer, prefix):
