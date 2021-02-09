@@ -37,7 +37,8 @@ def define_config():
   # General.
   config.seed = random.randint(2, 10**6)
   config.logdir = pathlib.Path('logs/experiments')
-  config.multi_test = False  # if `true`, run 5 experiments by varying the seeds
+  config.multi_test = False   # if `true`,
+  config.n_test = 5           # run 5 experiments by varying the seeds
   config.steps = 5e6
   config.eval_every = 1e4
   config.log_every = 1e3
@@ -328,8 +329,8 @@ class Dreamer(tools.Module):
     self._metrics['action_ent'].update_state(self._actor(feat).entropy())
 
   def _image_summaries(self, data, embed, image_pred):
-    summary_size = 6  # nr images to be shown
-    summary_length = 5  # nr step (length) of each gif
+    summary_size = 6    # nr images to be shown
+    summary_length = 5  # nr step observed before dreaming
     if self._c.obs_type == 'image':
       truth = data['image'][:summary_size] + 0.5
       recon = image_pred.mode()[:summary_size]
@@ -635,7 +636,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.multi_test:
     base_logdir = args.logdir
-    for seed in [random.randint(10**8, 10**9 - 1) for _ in range(5)]:
+    for seed in [random.randint(10**8, 10**9 - 1) for _ in range(args.n_test)]:
       args.logdir = base_logdir
       args.seed = seed
       main(args)
