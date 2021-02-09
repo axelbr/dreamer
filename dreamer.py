@@ -547,7 +547,7 @@ def main(config):
   set_seed(config.seed)
   config.logdir, datadir, cp_dir = create_log_dirs(config)
   write_config_summary(config)
-  #set_logging(config)
+  set_logging(config)
   print('Logdir', config.logdir)
 
   # Create environments.

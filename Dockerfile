@@ -1,20 +1,3 @@
-# Base Image on DRL image
-FROM mitdrl/ubuntu:latest
-
-# Timezone
-RUN apt-get update && DEBIAN_FRONTEND="noninteractive" apt-get install -y tzdata
-ENV TZ=America/New_York
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# Install dependencies
-RUN apt-get install -y libsndfile1
-RUN conda install python=3.6 tensorflow-gpu=2 tqdm
-RUN pip install keras-ncp
-
-# Update something to the bashrc (/etc/bashrc_skipper) to customize your shell
-RUN pip install pyfiglet
-RUN echo -e "alias py='python'" >> /etc/bashrc_skipper
-
 FROM tensorflow/tensorflow:2.3.1-gpu AS base
 
 # update
