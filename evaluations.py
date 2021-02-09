@@ -12,7 +12,7 @@ import argparse
 
 import tools
 import wrappers
-from dreamer import define_config, Dreamer
+from dreamer import define_config, Dreamer, preprocess
 
 import tensorflow as tf
 
@@ -58,7 +58,7 @@ def load_checkpoint(agent_name, base_agent, checkpoint, env):
     agent = functools.partial(base_agent, training=False)
   else:
     raise NotImplementedError(f'not implemented {agent_name}')
-  return agent
+  return base_agent, agent
 
 
 def count_videos(directory):
@@ -132,7 +132,7 @@ def main(args):
   for i, checkpoint in enumerate(args.checkpoints):
     copy_checkpoint(checkpoint, basedir, checkpoint_id=i+1)
     # load agent
-    agent = load_checkpoint(args.agent, base_agent, checkpoint, base_env)
+    agent_object, agent = load_checkpoint(args.agent, base_agent, checkpoint, base_env)
     for track in args.tracks:
       print(f"[Info] Checkpoint {i + 1}: {checkpoint}, Track: {track}")
       env = wrap_wrt_track(base_env, args.action_repeat, basedir, writer, track, checkpoint_id=i+1)
@@ -140,14 +140,31 @@ def main(args):
         obs = env.reset()
         done = False
         agent_state = None
+        obss, actions = [], []
         while not done:
           obs = {id: {k: np.stack([v]) for k, v in o.items()} for id, o in obs.items()}  # dreamer needs size (1, 1080)
           action, agent_state = agent(obs['A'], np.array([done]), agent_state)
+          obss.append(obs['A']['lidar'])
+          actions.append(action.numpy())
           action = {'A': np.array(action[0])}  # dreamer returns action of shape (1,2)
           obs, rewards, dones, infos = env.step(action)
           done = dones['A']
+        dream(agent_object, obss, actions)
       env.set_next_env()
   env.close()
+
+
+def dream(agent, obss, actions):
+  data = {}
+  data['lidar'] = np.concatenate(obss, axis=0)
+  data['action'] = np.concatenate(actions, axis=0)
+  embed = agent._encode(preprocess(data, agent._c))
+  post, prior = agent._dynamics.observe(embed, data['action'])
+  feat = agent._dynamics.get_feat(post)
+  image_pred = agent._decode(feat)
+  agent._image_summaries(data, embed, image_pred)
+
+
 
 
 def parse():
