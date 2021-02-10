@@ -414,8 +414,7 @@ def preprocess(obs, config):
       obs['lidar_occupancy'] = tf.cast(obs['lidar_occupancy'], dtype)     # no scale because bernoulli is in 0,1
     if 'reward' in obs:
       clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
-                          clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[
-        config.clip_rewards]
+                          clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[config.clip_rewards]
       obs['reward'] = clip_rewards(obs['reward'])
   return obs
 
@@ -502,6 +501,7 @@ def make_base_env(config, gui=False):
   env = wrappers.RaceCarWrapper(env, id='A')
   env = wrappers.ActionRepeat(env, config.action_repeat)
   env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
+  env = wrappers.OccupancyMapObs(env)
   return env
 
 

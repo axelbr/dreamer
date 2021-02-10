@@ -8,6 +8,7 @@ import gym
 import racecar_gym
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 envs = {}
 
@@ -212,7 +213,6 @@ class Collect:
       transition[id]['discount'] = info.get('discount', np.array(1 - float(dones[id])))
       transition[id]['progress'] = info[id]['lap'] + info[id]['progress'] - 1   # because lap starts at 1
       transition[id]['time'] = info[id]['time']
-      transition[id]['lidar_occupancy'] = info[id]['close_occupancy']
       self._episodes[i].append(transition[id])
     if any(dones.values()):
       episodes = [{k: [t[k] for t in episode] for k in episode[0]} for episode in self._episodes]
@@ -229,7 +229,6 @@ class Collect:
       transition[id]['reward'] = 0.0
       transition[id]['discount'] = 1.0
       transition[id]['progress'] = -1.0
-      transition[id]['lidar_occupancy'] = np.zeros(self._occupancy_shape, dtype=np.uint8)
       transition[id]['time'] = 0.0
       self._episodes[i] = [transition[id]]
     return obs
@@ -245,48 +244,6 @@ class Collect:
     else:
       raise NotImplementedError(value.dtype)
     return value.astype(dtype)
-
-
-class NormalizeObservations:
-  def __init__(self, env, config):
-    self._config = config
-    self._env = env
-    self._mask = {obs_type: np.logical_and(
-      np.isfinite(env.observation_space[obs_type].low),
-      np.isfinite(env.observation_space[obs_type].high)
-    ) for obs_type in env.observation_space.spaces.keys()}
-    self._low = {obs_type: np.where(self._mask, env.observation_space[obs_type].low, -1)
-                 for obs_type in env.observation_space.spaces.keys()}
-    self._high = {obs_type: np.where(self._mask, env.observation_space[obs_type].high, 1)
-                  for obs_type in env.observation_space.spaces.keys()}
-
-  def __getattr__(self, name):
-    return getattr(self._env, name)
-
-  @property
-  def observation_space(self):
-    space = {}
-    for obs in self._env.observation_space.spaces.keys():
-      if obs == self._config.obs_type:
-        low = np.where(self._mask[obs], -np.ones_like(self._low[obs]), self._low[obs])
-        high = np.where(self._mask[obs], np.ones_like(self._low[obs]), self._high[obs])
-        space[obs] = gym.spaces.Box(low, high, dtype=np.float32)
-      else:
-        space[obs] = self._env.observation_space.spaces[obs]
-    return gym.spaces.Dict(space)
-
-  @property
-  def original_observation_space(self):
-    return self._env.observation_space
-
-  def step(self, action):
-    original_obs, reward, done, info = self._env.step(action)
-    obs = original_obs
-    # normalize observations in [-.5, +.5]
-    obs_type = self._config.obs_type
-    obs[obs_type] = (original_obs[obs_type] - self._low[obs_type]) / (self._high[obs_type] - self._low[obs_type]) - 0.5
-    obs[obs_type] = np.where(self._mask[obs_type], original_obs[obs_type], obs[obs_type])
-    return obs, reward, done, info
 
 
 class NormalizeActions:
@@ -405,4 +362,43 @@ class RewardObs:
   def reset(self):
     obs = self._env.reset()
     obs['reward'] = 0.0
+    return obs
+
+
+class OccupancyMapObs:
+
+  def __init__(self, env):
+    self._env = env
+    self._occupancy_map = env._scenario.world._maps['occupancy']
+
+  def __getattr__(self, name):
+    return getattr(self._env, name)
+
+  @property
+  def observation_space(self):
+    spaces = self._env.observation_space.spaces
+    assert 'lidar_occupancy' not in spaces
+    spaces['lidar_occupancy'] = gym.spaces.Box(-np.inf, np.inf, shape=(64, 64, 1,), dtype=np.uint8)
+    return gym.spaces.Dict(spaces)
+
+  def step(self, action):
+    obs, reward, done, info = self._env.step(action)
+    # neigh occupancy map for reconstruction
+    for id in self._env.agent_ids:
+      pose = info[id]['pose']
+      pr, pc = self._occupancy_map.to_pixel(pose)  # center the pose
+      neigh_sz = 100  # 100 pixel (5 meters) to produce images of sz 128
+      map = self._occupancy_map._map[pr - (neigh_sz + 10):pr + (neigh_sz + 10), pc - (neigh_sz + 10):pc + (neigh_sz + 10)].copy()
+      map = map.astype(np.uint8)
+      map = ndimage.rotate(map, np.rad2deg(2 * np.pi - pose[-1]))  # rotate according to the car orientation
+      cr, cc = map.shape[0] // 2, map.shape[1] // 2
+      submap = map[cr - neigh_sz:cr + neigh_sz, cc - neigh_sz:cc + neigh_sz]
+      submap = np.expand_dims(np.array(Image.fromarray(submap).resize(size=(64, 64))), axis=-1)   # resize + add channel
+      obs[id]['lidar_occupancy'] = submap
+    return obs, reward, done, info
+
+  def reset(self, **kwargs):
+    obs = self._env.reset(**kwargs)
+    for id in self._env.agent_ids:
+      obs[id]['lidar_occupancy'] = np.zeros((64, 64, 1), dtype=np.uint8)
     return obs
