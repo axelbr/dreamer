@@ -155,15 +155,15 @@ class TimeLimit:
 
 class Render:
 
-  def __init__(self, env, callbacks=None, follow_view=True):
+  def __init__(self, env, callbacks=None, follow_view=False):
     self._env = env
     self._callbacks = callbacks or ()
     self._follow_view = follow_view
     self._reset_videos_dict()
 
   def _reset_videos_dict(self):
-    self._videos = {'birds_eye-A': []}
-    if self._follow_view:
+    self._videos = {'birds_eye-A': []}    # by default: store birds-eye view on first agent
+    if self._follow_view:                 # optional: store follow-view from each agent
       for agent_id in self._env.agent_ids:
         self._videos[f'follow-{agent_id}'] = []
 

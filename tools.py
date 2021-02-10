@@ -69,6 +69,7 @@ def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, minv=-1, maxv=+1, color='r
   ax.scatter(x, y, s=5, c=color)
   ax.set_xlim(minv-margin, maxv+margin)
   ax.set_ylim(minv-margin, maxv+margin)
+  ax.axis('off')
 
 def lidar_to_image(scan, minv=-1, maxv=+1, color="k"):
   # shift pi/2 just to align for visualization

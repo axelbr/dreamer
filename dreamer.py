@@ -323,6 +323,7 @@ class Dreamer(tools.Module):
     for name, logprob in likes.items():
       self._metrics[name + '_loss'].update_state(-logprob)
     self._metrics['div'].update_state(div)
+    self._metrics['div'].update_state(div)
     self._metrics['model_loss'].update_state(model_loss)
     self._metrics['value_loss'].update_state(value_loss)
     self._metrics['actor_loss'].update_state(actor_loss)
@@ -407,12 +408,15 @@ def preprocess(obs, config):
   with tf.device('cpu:0'):
     if 'image' in obs:
       obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
-    obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
-    obs['lidar_occupancy'] = tf.cast(obs['lidar_occupancy'], dtype)     # no scale because bernoulli is in 0,1
-    clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
-                        clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[
-      config.clip_rewards]
-    obs['reward'] = clip_rewards(obs['reward'])
+    if 'lidar' in obs:
+      obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
+    if 'lidar_occupancy' in obs:
+      obs['lidar_occupancy'] = tf.cast(obs['lidar_occupancy'], dtype)     # no scale because bernoulli is in 0,1
+    if 'reward' in obs:
+      clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
+                          clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[
+        config.clip_rewards]
+      obs['reward'] = clip_rewards(obs['reward'])
   return obs
 
 
@@ -442,10 +446,6 @@ def summarize_episode(episode_list, config, datadir, writer, prefix):
     (f'{prefix}/return', float(episode['reward'].sum())),
     (f'{prefix}/length', len(episode['reward']) - 1),
     (f'{prefix}/progress', float(max(episode['progress']))),
-    (f'actions/{prefix}/motor_mean', np.mean(episode['action'][:, 0])),
-    (f'actions/{prefix}/motor_std', np.std(episode['action'][:, 0])),
-    (f'actions/{prefix}/steering_mean', np.mean(episode['action'][:, 1])),
-    (f'actions/{prefix}/steering_std', np.std(episode['action'][:, 1])),
     (f'episodes', episodes)]
   step = count_steps(datadir, config)
   with writer.as_default():  # Env might run in a different thread.
