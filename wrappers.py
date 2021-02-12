@@ -9,6 +9,7 @@ import racecar_gym
 import numpy as np
 from PIL import Image
 from scipy import ndimage
+import tasks
 
 envs = {}
 
