@@ -286,7 +286,7 @@ class Dreamer(tools.Module):
     elif self._c.eval_noise:
       amount = self._c.eval_noise
     else:
-      return action
+      return tf.clip_by_value(action, -1, 1)
     if self._c.expl == 'additive_gaussian':
       return tf.clip_by_value(tfd.Normal(action, amount).sample(), -1, 1)
     if self._c.expl == 'completely_random':

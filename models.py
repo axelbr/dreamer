@@ -267,7 +267,7 @@ class ActionDecoder(tools.Module):
     x = features
     for index in range(self._layers):
       x = self.get(f'h{index}', tfkl.Dense, self._units, self._act)(x)
-    if self._dist == 'tanh_normal':
+    if self._dist == 'tanh_normal':   # Original from Dreamer
       # https://www.desmos.com/calculator/rcmcf5jwe7
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
       mean, std = tf.split(x, 2, -1)
@@ -278,7 +278,6 @@ class ActionDecoder(tools.Module):
       dist = tfd.Independent(dist, 1)
       dist = tools.SampleDist(dist)
     elif self._dist == 'tanh_normalized':
-      # https://www.desmos.com/calculator/rcmcf5jwe7
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
       x = tf.reshape(x, [-1, 2 * self._size])
       x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)  # `training` true only in imagination
@@ -289,7 +288,6 @@ class ActionDecoder(tools.Module):
       dist = tfd.Normal(mean, std)
       dist = tfd.Independent(dist, 1)
     elif self._dist == 'linear_normalized':
-      # https://www.desmos.com/calculator/rcmcf5jwe7
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
       x = tf.reshape(x, [-1, 2 * self._size])
       x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)   # `training` true only in imagination
