@@ -233,7 +233,6 @@ class Dreamer(tools.Module):
       if tf.equal(log_images, True):
         self._image_summaries(data, embed, image_pred)
         self._reward_summaries(data, reward_pred)
-        self._value_summaries(target, value_pred)
 
   def _build_model(self):
     acts = dict(
@@ -324,7 +323,6 @@ class Dreamer(tools.Module):
     for name, logprob in likes.items():
       self._metrics[name + '_loss'].update_state(-logprob)
     self._metrics['div'].update_state(div)
-    self._metrics['div'].update_state(div)
     self._metrics['model_loss'].update_state(model_loss)
     self._metrics['value_loss'].update_state(value_loss)
     self._metrics['actor_loss'].update_state(actor_loss)
@@ -382,16 +380,6 @@ class Dreamer(tools.Module):
     video_image = tf.expand_dims(video_image, axis=1)  # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
     tools.graph_summary(self._writer, tools.video_summary,
                         'agent/train/reward', video_image, self._step, int(100 / self._c.action_repeat))
-
-  def _value_summaries(self, target, value_pred):
-    summary_size = 6  # nr images to be shown
-    truth = tools.reward_to_image(tf.transpose(target)[:summary_size, :], min_y=0, max_y=100)
-    model = tools.reward_to_image(tf.transpose(value_pred.mode())[:summary_size, :], min_y=0, max_y=100)
-    error = model - truth
-    video_image = tf.concat([truth, model, error], 1)  # note: no T dimension, then stack over dim 1
-    video_image = tf.expand_dims(video_image, axis=1)  # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
-    tools.graph_summary(self._writer, tools.video_summary,
-                        'agent/train/value', video_image, self._step, int(100 / self._c.action_repeat))
 
   def _write_summaries(self):
     step = int(self._step.numpy())
@@ -461,9 +449,6 @@ def summarize_episode(episode_list, config, datadir, writer, prefix):
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar(k, v) for k, v in metrics]
-  if prefix=='test':
-    with open(config.logdir / f'episodes/actions_{step}_{time.time()}.txt', 'w') as f:
-      f.write('\n'.join([str(a) for a in episode['action']]))
 
 
 
@@ -536,7 +521,7 @@ def write_config_summary(config):
     f.write(text)
 
 def create_log_dirs(config):
-  logdir = pathlib.Path(f'{config.logdir}/{config.track}_dreamer_{config.action_dist}_{config.task}_Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}_{config.seed}_{time.time()}')
+  logdir = pathlib.Path(f'{config.logdir}/{config.track}_dreamer_{config.task}_{config.obs_type}_Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}_{config.seed}_{time.time()}')
   datadir = logdir / 'episodes'
   checkpoint_dir = logdir / 'checkpoints'
   best_checkpoint_dir = checkpoint_dir / 'best'
