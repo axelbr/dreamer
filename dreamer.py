@@ -536,7 +536,7 @@ def write_config_summary(config):
     f.write(text)
 
 def create_log_dirs(config):
-  logdir = pathlib.Path(f'{config.logdir}/{config.track}_dreamer_{config.task}_Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}_{config.seed}_{time.time()}')
+  logdir = pathlib.Path(f'{config.logdir}/{config.track}_dreamer_{config.action_dist}_{config.task}_Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}_{config.seed}_{time.time()}')
   datadir = logdir / 'episodes'
   checkpoint_dir = logdir / 'checkpoints'
   best_checkpoint_dir = checkpoint_dir / 'best'
