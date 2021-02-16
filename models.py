@@ -58,14 +58,14 @@ class RSSM(tools.Module):
 
   @tf.function
   def obs_step(self, prev_state, prev_action, embed):
-    prior = self.img_step(prev_state, prev_action)  # get distribution+ of the current state
+    prior = self.img_step(prev_state, prev_action)
     x = tf.concat([prior['deter'], embed], -1)
     x = self.get('obs1', tfkl.Dense, self._hidden_size, self._activation)(x)
     x = self.get('obs2', tfkl.Dense, 2 * self._stoch_size, None)(x)
     mean, std = tf.split(x, 2, -1)
     std = tf.nn.softplus(std) + 0.1
     stoch = self.get_dist({'mean': mean, 'std': std}).sample()
-    post = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': prior['deter']}  # get distr+ of next state
+    post = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': prior['deter']}
     return post, prior
 
   @tf.function
@@ -242,7 +242,7 @@ class DenseDecoder(tools.Module):
     x = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
     if self._dist == 'normal':
       return tfd.Independent(tfd.Normal(x, 1), len(self._shape))
-    if self._dist == 'binary':
+    elif self._dist == 'binary':
       return tfd.Independent(tfd.Bernoulli(x), len(self._shape))
     raise NotImplementedError(self._dist)
 
@@ -262,7 +262,7 @@ class ActionDecoder(tools.Module):
     self._init_std = init_std
     self._mean_scale = mean_scale
 
-  def __call__(self, features):
+  def __call__(self, features, training=False):
     raw_init_std = np.log(np.exp(self._init_std) - 1)
     x = features
     for index in range(self._layers):
@@ -277,6 +277,26 @@ class ActionDecoder(tools.Module):
       dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
       dist = tfd.Independent(dist, 1)
       dist = tools.SampleDist(dist)
+    elif self._dist == 'tanh_normalized':
+      # https://www.desmos.com/calculator/rcmcf5jwe7
+      x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
+      x = tf.reshape(x, [-1, 2 * self._size])
+      x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)  # `training` true only in imagination
+      x = tf.reshape(x, [*features.shape[:-1], -1])
+      mean, std = tf.split(x, 2, -1)
+      mean = tf.tanh(mean)  # action in +-1
+      std = tf.nn.softplus(std) + self._min_std  # std is always positive
+      dist = tfd.Normal(mean, std)
+      dist = tfd.Independent(dist, 1)
+    elif self._dist == 'linear_normalized':
+      # https://www.desmos.com/calculator/rcmcf5jwe7
+      x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
+      x = tf.reshape(x, [-1, 2 * self._size])
+      x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)   # `training` true only in imagination
+      x = tf.reshape(x, [*features.shape[:-1], -1])
+      mean, std = tf.split(x, 2, -1)
+      dist = tfd.Normal(mean, std)
+      dist = tfd.Independent(dist, 1)
     elif self._dist == 'onehot':
       x = self.get(f'hout', tfkl.Dense, self._size)(x)
       dist = tools.OneHotDist(x)

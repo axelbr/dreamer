@@ -233,6 +233,7 @@ class Dreamer(tools.Module):
       if tf.equal(log_images, True):
         self._image_summaries(data, embed, image_pred)
         self._reward_summaries(data, reward_pred)
+        self._value_summaries(target, value_pred)
 
   def _build_model(self):
     acts = dict(
@@ -303,8 +304,8 @@ class Dreamer(tools.Module):
       post = {k: v[:, :-1] for k, v in post.items()}
     flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
     start = {k: flatten(v) for k, v in post.items()}
-    policy = lambda state: self._actor(
-      tf.stop_gradient(self._dynamics.get_feat(state))).sample()
+    policy = lambda state: tf.clip_by_value(self._actor(
+      tf.stop_gradient(self._dynamics.get_feat(state)), training=True).sample(), -1, +1)
     states = tools.static_scan(
       lambda prev, _: self._dynamics.img_step(prev, policy(prev)),
       tf.range(self._c.horizon), start)
@@ -382,6 +383,16 @@ class Dreamer(tools.Module):
     tools.graph_summary(self._writer, tools.video_summary,
                         'agent/train/reward', video_image, self._step, int(100 / self._c.action_repeat))
 
+  def _value_summaries(self, target, value_pred):
+    summary_size = 6  # nr images to be shown
+    truth = tools.reward_to_image(tf.transpose(target)[:summary_size, :], min_y=0, max_y=100)
+    model = tools.reward_to_image(tf.transpose(value_pred.mode())[:summary_size, :], min_y=0, max_y=100)
+    error = model - truth
+    video_image = tf.concat([truth, model, error], 1)  # note: no T dimension, then stack over dim 1
+    video_image = tf.expand_dims(video_image, axis=1)  # since no gif, expand dim=1 (T), B,H,W,C -> B,T,H,W,C
+    tools.graph_summary(self._writer, tools.video_summary,
+                        'agent/train/value', video_image, self._step, int(100 / self._c.action_repeat))
+
   def _write_summaries(self):
     step = int(self._step.numpy())
     metrics = [(k, float(v.result())) for k, v in self._metrics.items()]
@@ -450,6 +461,9 @@ def summarize_episode(episode_list, config, datadir, writer, prefix):
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar(k, v) for k, v in metrics]
+  if prefix=='test':
+    with open(config.logdir / f'episodes/actions_{step}_{time.time()}.txt', 'w') as f:
+      f.write('\n'.join([str(a) for a in episode['action']]))
 
 
 
@@ -500,7 +514,7 @@ def make_base_env(config, gui=False):
   env = wrappers.RaceCarBaseEnv(track=config.track, task=config.task, rendering=gui)
   env = wrappers.RaceCarWrapper(env, id='A')
   env = wrappers.ActionRepeat(env, config.action_repeat)
-  env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
+  #env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
   env = wrappers.OccupancyMapObs(env)
   return env
 
@@ -573,7 +587,7 @@ def main(config):
     agents = [random_agent for _ in range(train_env.n_agents)]
   elif config.prefill_agent == 'gap_follower':
     gapfollower = GapFollower()
-    gap_follower_agent = lambda o, d, s: ([gapfollower.action(o)], None)
+    gap_follower_agent = lambda o, d, s: ([np.clip(gapfollower.action(o) / np.array([2, 1]), -1, +1)], None)
     agents = [gap_follower_agent for _ in range(train_env.n_agents)]
   else:
     raise NotImplementedError(f'prefill agent {config.prefill_agent} not implemented')

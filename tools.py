@@ -97,12 +97,12 @@ def plot_step(x: np.ndarray, y: np.ndarray, *, ax, color='k', min_y=-1, max_y=1)
   ax.text(x[0] + margin, min_y + margin, 'return={:.2f}'.format(np.sum(y)))
   ax.set_ylim(min_y - margin, max_y + margin)
 
-def reward_to_image(reward_data):
+def reward_to_image(reward_data, min_y=-1, max_y=1):
   batch_video = []
   for b in range(reward_data.shape[0]):
     r = reward_data[b, :]
     x = range(r.shape[0])
-    img = plot_step(x, r, min_y=-1, max_y=1)[:, :, :3]    # return RGBA image, then discard "alpha" channel
+    img = plot_step(x, r, min_y=min_y, max_y=max_y)[:, :, :3]    # return RGBA image, then discard "alpha" channel
     batch_video.append(img)
   return tf.stack(batch_video)
 
