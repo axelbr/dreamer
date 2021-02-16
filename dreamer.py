@@ -514,7 +514,7 @@ def make_base_env(config, gui=False):
   env = wrappers.RaceCarBaseEnv(track=config.track, task=config.task, rendering=gui)
   env = wrappers.RaceCarWrapper(env, id='A')
   env = wrappers.ActionRepeat(env, config.action_repeat)
-  #env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
+  env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
   env = wrappers.OccupancyMapObs(env)
   return env
 
