@@ -1,6 +1,6 @@
-token=""
+token=`cat token.in`
+psw=`cat password.in`
 logdir=${1}
-psw=""
 
 echo -e "[Info] Creating tar ball for log dir ${logdir}\n"
 tarball="$(who | cut -d ' ' -f 1)_$(date '+%d%m%Y_%H%M%S')_$(basename -- ${logdir}).tar"
