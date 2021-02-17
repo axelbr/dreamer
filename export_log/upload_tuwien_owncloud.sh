@@ -4,7 +4,10 @@ logdir=${1}
 
 echo -e "[Info] Creating tar ball for log dir ${logdir}\n"
 tarball="${USER}_$(date '+%d%m%Y_%H%M%S')_$(basename -- ${logdir}).tar"
-tar cvf ${tarball} --exclude='*/episodes' --exclude='*/checkpoints/*pkl' ${logdir}
+
+# note: since tar v 1.29, exclude works only on successive arguments
+# for this reason we exclude checkpoints/*pkl after storing the best ones
+tar cvf ${tarball} --exclude='*/episodes' ${logdir}/**/checkpoints/best/*pkl --exclude='*/checkpoints/*pkl' ${logdir}
 echo -e "[Info] Created ${tarball}\n"
 
 echo "[Info] Uploading ${tarball} ..."
