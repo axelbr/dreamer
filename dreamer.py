@@ -449,6 +449,9 @@ def summarize_episode(episode_list, config, datadir, writer, prefix):
   with writer.as_default():  # Env might run in a different thread.
     tf.summary.experimental.set_step(step)
     [tf.summary.scalar(k, v) for k, v in metrics]
+  if prefix=='test':
+    with open(config.logdir / f'episodes/actions_{step}_{time.time()}.txt', 'w') as f:
+      f.write('\n'.join([str(a) for a in episode['action']]))
 
 
 
