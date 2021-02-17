@@ -277,7 +277,7 @@ class ActionDecoder(tools.Module):
       dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
       dist = tfd.Independent(dist, 1)
       dist = tools.SampleDist(dist)
-    elif self._dist == 'tanh_normalized':
+    elif self._dist == 'normalized_tanh_normal':
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
       x = tf.reshape(x, [-1, 2 * self._size])
       x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)  # `training` true only in imagination
@@ -287,7 +287,7 @@ class ActionDecoder(tools.Module):
       std = tf.nn.softplus(std) + self._min_std  # std is always positive
       dist = tfd.Normal(mean, std)
       dist = tfd.Independent(dist, 1)
-    elif self._dist == 'linear_normalized':
+    elif self._dist == 'normalized_linear_normal':
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
       x = tf.reshape(x, [-1, 2 * self._size])
       x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)   # `training` true only in imagination
@@ -297,9 +297,6 @@ class ActionDecoder(tools.Module):
       std = tf.nn.softplus(std) + self._min_std
       dist = tfd.Normal(mean, std)
       dist = tfd.Independent(dist, 1)
-    elif self._dist == 'onehot':
-      x = self.get(f'hout', tfkl.Dense, self._size)(x)
-      dist = tools.OneHotDist(x)
     else:
       raise NotImplementedError(self._dist)
     return dist
