@@ -1,6 +1,6 @@
-token=7EOrGo99qGVR4qA
-psw=dreamer
+token=""
 logdir=${1}
+psw=""
 
 echo -e "[Info] Creating tar ball for log dir ${logdir}\n"
 tarball="$(basename -- ${logdir}).tar"
