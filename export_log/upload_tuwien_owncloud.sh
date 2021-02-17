@@ -3,7 +3,7 @@ logdir=${1}
 psw=""
 
 echo -e "[Info] Creating tar ball for log dir ${logdir}\n"
-tarball="$(basename -- ${logdir}).tar"
+tarball="$(who | cut -d ' ' -f 1)_$(date '+%d%m%Y_%H%M%S')_$(basename -- ${logdir}).tar"
 tar cvf ${tarball} --exclude='*/episodes' --exclude='*/checkpoints/*pkl' ${logdir}
 echo -e "[Info] Created ${tarball}\n"
 
