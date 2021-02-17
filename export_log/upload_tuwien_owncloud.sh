@@ -1,5 +1,5 @@
-token=`cat token.in`
-psw=`cat password.in`
+token=`cat .token`
+psw=`cat .password`
 logdir=${1}
 
 echo -e "[Info] Creating tar ball for log dir ${logdir}\n"

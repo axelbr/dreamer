@@ -4,7 +4,6 @@ __pycache__/
 ./dist
 ./logdir
 ./logs
-./export_log
 venv
 .idea
 *gif
@@ -14,5 +13,6 @@ MUJOCO_LOG.TXT
 events*v2
 /metrics.jsonl
 /logs/
-/export_log/password.in
-/export_log/token.in
+/export_log/.password
+/export_log/.token
+/export_log/*tar
