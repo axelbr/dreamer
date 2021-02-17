@@ -5,7 +5,7 @@ import time
 import numpy as np
 
 import imageio
-from racecar_gym.envs import ChangingTrackMultiAgentRaceEnv
+from racecar_gym.envs import ChangingTrackMultiAgentRaceEnv, MultiAgentRaceEnv
 from racecar_gym import MultiAgentScenario
 from agents.gap_follower import GapFollower
 import argparse
@@ -15,17 +15,19 @@ import wrappers
 from dreamer import define_config, Dreamer, preprocess
 
 import tensorflow as tf
+import matplotlib.pyplot as plt
+import time
 
-#tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
-def init_agent(agent_name: str, env):
+def init_agent(agent_name: str, obs_type: str, env):
   if agent_name == "dreamer":
-    agent = init_dreamer(env)
+    agent = init_dreamer(env, obs_type)
   else:
     raise NotImplementedError(f'not implemented {agent_name}')
   return agent
 
-def init_dreamer(env):
+def init_dreamer(env, obs_type):
   config = define_config()
   config.log_scalars = True     # note: important log_scalars True for build_models
   config.log_images = False
@@ -33,6 +35,7 @@ def init_dreamer(env):
   config.batch_length = 5
   config.batch_size = 5
   config.horizon = 5
+  config.obs_type = obs_type
   # prefill environment for model initialization
   datadir = pathlib.Path('.tmp')
   writer = tf.summary.create_file_writer(str(datadir), max_queue=1000, flush_millis=20000)
@@ -92,12 +95,25 @@ def summarize_episode(episodes, outdir, writer, prefix, action_repeat):
     [tf.summary.scalar(k, v) for k, v in metrics]
 
 def make_multi_track_env(tracks, action_repeat, rendering=True):
+  # note: problem of multi-track racing env with wrapper `OccupancyMapObs` because it initializes the map once
+  # ideas to solve this issue? when changing env force the update of occupancy map in wrapper?
   scenarios = [MultiAgentScenario.from_spec(f'scenarios/eval/{track}.yml', rendering=rendering) for track in tracks]
   env = ChangingTrackMultiAgentRaceEnv(scenarios=scenarios, order='manual')
   env = wrappers.RaceCarWrapper(env)
   env = wrappers.FixedResetMode(env, mode='grid')
   env = wrappers.ActionRepeat(env, action_repeat)
   env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
+  env = wrappers.OccupancyMapObs(env)
+  return env
+
+def make_single_track_env(track, action_repeat, rendering=True):
+  scenario = MultiAgentScenario.from_spec(f'scenarios/eval/{track}.yml', rendering=rendering)
+  env = MultiAgentRaceEnv(scenario=scenario)
+  env = wrappers.RaceCarWrapper(env)
+  env = wrappers.FixedResetMode(env, mode='grid')
+  env = wrappers.ActionRepeat(env, action_repeat)
+  env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
+  env = wrappers.OccupancyMapObs(env)
   return env
 
 def wrap_wrt_track(env, action_repeat, outdir, writer, track, checkpoint_id):
@@ -126,8 +142,9 @@ def main(args):
     tf.config.experimental.set_memory_growth(gpu, True)
 
   basedir, writer = make_log_dir(args)
-  base_env = make_multi_track_env(args.tracks, action_repeat=args.action_repeat, rendering=False)
-  base_agent = init_agent(args.agent, base_env)
+  #base_env = make_multi_track_env(args.tracks, action_repeat=args.action_repeat, rendering=False)
+  base_env = make_single_track_env(args.tracks[0], action_repeat=args.action_repeat, rendering=False)
+  base_agent = init_agent(args.agent, args.obs_type, base_env)
   print(f"[Info] Agent Variables: {len(base_agent.variables)}")
   for i, checkpoint in enumerate(args.checkpoints):
     copy_checkpoint(checkpoint, basedir, checkpoint_id=i+1)
@@ -140,37 +157,78 @@ def main(args):
         obs = env.reset()
         done = False
         agent_state = None
-        obss, actions = [], []
+        cameras, lidars, occupancies, actions = [], [], [], []
         while not done:
           obs = {id: {k: np.stack([v]) for k, v in o.items()} for id, o in obs.items()}  # dreamer needs size (1, 1080)
           action, agent_state = agent(obs['A'], np.array([done]), agent_state)
-          obss.append(obs['A']['lidar'])
-          actions.append(action.numpy())
+          actions.append(action.numpy()[0])
           action = {'A': np.array(action[0])}  # dreamer returns action of shape (1,2)
-          obs, rewards, dones, infos = env.step(action)
+          obs, rewards, dones, info = env.step(action)
+          lidars.append(obs['A']['lidar'])
+          occupancies.append(obs['A']['lidar_occupancy'])
+          cameras.append(env.render(mode='birds_eye'))
           done = dones['A']
-        dream(agent_object, obss, actions)
-      env.set_next_env()
+        dream(agent_object, cameras, lidars, occupancies, actions, args.obs_type, basedir)
+      #env.set_next_env()
   env.close()
 
 
-def dream(agent, obss, actions):
+def dream(agent, cameras, lidars, occupancies, actions, obstype, basedir):
   data = {}
-  data['lidar'] = np.concatenate(obss, axis=0)
-  data['action'] = np.concatenate(actions, axis=0)
-  embed = agent._encode(preprocess(data, agent._c))
+  data['lidar'] = np.stack(np.expand_dims(lidars, 0))
+  data['action'] = np.stack(np.expand_dims(actions, 0))
+  data['lidar_occupancy'] = np.stack(np.expand_dims(occupancies, 0))
+  data = preprocess(data, agent._c)
+  data['image'] = np.stack(np.expand_dims(cameras, 0))    # hack: don't preprocess image
+  embed = agent._encode(data)
   post, prior = agent._dynamics.observe(embed, data['action'])
   feat = agent._dynamics.get_feat(post)
   image_pred = agent._decode(feat)
-  agent._image_summaries(data, embed, image_pred)
+  save_dreams(basedir, agent, data, embed, image_pred, obs_type=obstype, summary_length=len(lidars)-1)
 
-
+def save_dreams(basedir, agent, data, embed, image_pred, obs_type='lidar', summary_size=1, summary_length=5, skip_frames=10):
+  imagedir = basedir / f"images/{obs_type}"
+  imagedir.mkdir(parents=True, exist_ok=True)
+  if obs_type == 'lidar':
+    truth = data['lidar'][:summary_size] + 0.5
+    recon = image_pred.mode()[:summary_size]
+    init, _ = agent._dynamics.observe(embed[:summary_size, :summary_length],
+                                     data['action'][:summary_size, :summary_length])
+    init = {k: v[:, -1] for k, v in init.items()}
+    prior = agent._dynamics.imagine(data['action'][:summary_size, summary_length:], init)
+    openl = agent._decode(agent._dynamics.get_feat(prior)).mode()
+    model = tf.concat([recon[:, :summary_length] + 0.5, openl + 0.5], 1)
+    truth_img = tools.lidar_to_image(truth)
+    model_img = tools.lidar_to_image(model)
+  elif obs_type == 'lidar_occupancy':
+    truth_img = data['lidar_occupancy'][:summary_size]
+    recon = image_pred.mode()[:summary_size]
+    recon = tf.cast(recon, tf.float32)    # concatenation requires same type
+    init, _ = agent._dynamics.observe(embed[:summary_size, :summary_length],
+                                     data['action'][:summary_size, :summary_length])
+    init = {k: v[:, -1] for k, v in init.items()}
+    prior = agent._dynamics.imagine(data['action'][:summary_size, summary_length:], init)
+    openl = agent._decode(agent._dynamics.get_feat(prior)).mode()
+    openl = tf.cast(openl, tf.float32)
+    model_img = tf.concat([recon[:, :summary_length], openl], 1)    # note: recon/openl is already 0 or 1, no need scaling
+  timestamp = time.time()
+  plt.box(False)
+  plt.axis(False)
+  plt.ion()
+  for imgs, prefix in zip([data['image'], truth_img, model_img], ["camera", "true", "recon"]):
+    for ep in range(imgs.shape[0]):
+      for t in range(0, imgs.shape[1], skip_frames):
+        # plot black/white without borders
+        plt.imshow(imgs[ep, t, :, :, :], cmap='binary')
+        plt.savefig(f"{imagedir}/frame_{timestamp}_{prefix}_{ep}_{t}.png",
+                    bbox_inches='tight', transparent=True, pad_inches=0)
 
 
 def parse():
   tracks = ['austria', 'barcelona', 'gbr', 'treitlstrasse', 'treitlstrasse_v2']
   parser = argparse.ArgumentParser()
   parser.add_argument('--agent', type=str, choices=["dreamer"], required=True)
+  parser.add_argument('--obs_type', type=str, choices=["lidar", "lidar_occupancy"], required=True)
   parser.add_argument('--trained_on', type=str, required=True, choices=tracks)
   parser.add_argument('--checkpoints', nargs='+', type=pathlib.Path, required=True)
   parser.add_argument('--outdir', type=pathlib.Path, required=True)

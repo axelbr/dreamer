@@ -16,9 +16,10 @@ PALETTE = 10 * (
     '#f781bf', '#888888', '#a6cee3', '#b2df8a', '#cab2d6', '#fb9a99',
     '#fdbf6f')
 
-ALL_TRACKS_DICT = {'austria': 'AUT', 'barcelona': 'BRC', 'columbia': 'COL',
-                   'gbr': 'GBR', 'treitlstrasse': 'TR', 'treitlstrasse_v2': 'TR2'}
-ALL_METHODS_DICT = {'dreamer': 'Dream', 'mpo': 'MPO', 'd4pg': 'D4PG',}
+ALL_TRACKS_DICT = {'austria': 'AUSTRIA', 'barcelona': 'BRC', 'columbia': 'COLUMBIA',
+                   'gbr': 'GBR', 'treitlstrasse': 'LECTURE HALL',
+                   'treitlstrasse_v2': 'LECTURE HALL', 'treitlstrassev2': 'LECTURE HALL'}
+ALL_METHODS_DICT = {'dreamer': 'Dream', 'mpo': 'MPO', 'd4pg': 'D4PG', 'ppo': 'PPO', 'sac': 'SAC'}
 DREAMER_CONFS = {}
 Run = collections.namedtuple('Run', 'logdir train_track test_track method seed x y')
 
@@ -37,12 +38,18 @@ def process_logdir_name(logdir):
     horizon = int(''.join(filter(str.isdigit, horizon)))
     seed = int(seed)
     algo = f'{algo} (AR{action_repeat}, BL{batch_len}, H{horizon})'
+  elif len(splitted) == 10:  # assume logdir: track_dreamer_method_max_progress_ArK_BlL_HH_seed_timestamp
+    track, algo, method, _, _, action_repeat, batch_len, horizon, seed, _ = splitted
+    action_repeat = int(''.join(filter(str.isdigit, action_repeat)))  # keep param value
+    batch_len = int(''.join(filter(str.isdigit, batch_len)))
+    horizon = int(''.join(filter(str.isdigit, horizon)))
+    seed = int(seed)
+    algo = f'{algo} + {method}'   #
   else:
     raise NotImplementedError(f'cannot parse {logdir}')
   if "dreamer" in algo:
     if not algo in DREAMER_CONFS.keys():
       DREAMER_CONFS[algo] = f"dreamer{len(DREAMER_CONFS.keys())+1}"
-    algo = DREAMER_CONFS[algo]
   return track, algo, seed
 
 def process_filepath(path_list):
@@ -70,17 +77,19 @@ def load_runs(args):
           continue
         if not any([m in method for m in args.methods]):
           continue
-        event_acc = EventAccumulator(str(file), size_guidance={'tensors': 1000})  # max number of items to keep
+        event_acc = EventAccumulator(str(file), size_guidance={'scalars': 100000, 'tensors': 100000})  # max number of items to keep
         event_acc.Reload()
         if args.type=='train':
           if args.tag in event_acc.Tags()['tensors']:
             tag = args.tag
-          elif 'sim/' + args.tag in event_acc.Tags()['tensors']:  # TODO: remove it once use only new log formats
-            tag = 'sim/' + args.tag
-          else:
-            continue
-          y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
-          x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
+            y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
+            x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
+          elif args.tag in event_acc.Tags()['scalars']:
+            tag = args.tag
+            y = np.array([float(scalar.value) for scalar in event_acc.Scalars(tag)])
+            x = np.array([int(scalar.step) for scalar in event_acc.Scalars(tag)])
+          if 'sac' in method or 'ppo' in method:    # to be consistent with logs collected with sb3
+            x = x * 4
           runs.append(Run(filepath, train_track, train_track, method, seed, x, y))  # in this case, train track = test track
           print('.', end='')
         else:
@@ -177,21 +186,27 @@ def plot_filled_curve(args, runs, axes, aggregator):
   if not type(axes)==np.ndarray:
     axes = [axes]
   for i, (track, ax) in enumerate(zip(tracks, axes)):
-    ax.set_title(track.title())
-    ax.set_xlabel(args.xlabel)
-    if i <= 0:  # show y label only on first row
-      ax.set_ylabel(args.ylabel if args.ylabel else args.tag)
+    if args.show_labels:
+      ax.set_title(ALL_TRACKS_DICT[track].upper())
+      ax.set_xlabel(args.xlabel)
+      if i <= 0:  # show y label only on first row
+        ax.set_ylabel(args.ylabel if args.ylabel else args.tag)
+    track_runs = [r for r in runs if r.train_track == track]
     for j, method in enumerate(methods):
       color = PALETTE[j]
-      filter_runs = [r for r in runs if r.train_track == track and r.method == method]
+      filter_runs = [r for r in track_runs if r.method == method]
       if len(filter_runs) > 0:
         x, mean, min, max = aggregator(filter_runs, args.binning)
-        ax.plot(x, mean, color=color, label=method.capitalize())
+        min = np.where(min>0, min, 0)
+        ax.plot(x, mean, color=color, label=method.upper())
         ax.fill_between(x, min, max, color=color, alpha=0.1)
-      if track=='columbia':
-        ax.set_xlim(0, 1000000)
-    if len(methods)>1 and args.legend:
-      ax.legend()
+    # plot baselines
+    min_x = np.min(np.concatenate([r.x for r in track_runs]))
+    max_x = np.max(np.concatenate([r.x for r in track_runs]))
+    for j, (value, name) in enumerate(zip(args.hbaseline_values, args.hbaseline_names)):
+      color = PALETTE[len(methods) + j]
+      ax.hlines(y=value, xmin=min_x, xmax=max_x, color=color, linestyle='dashed', label=name.upper())
+
 
 
 def aggregate_max(runs):
@@ -217,14 +232,17 @@ def get_best_performing_models(args, n_models=5):
 def plot_train_figures(args, outdir):
   runs = load_runs(args)
   tracks = sorted(set([r.train_track for r in runs]))
-  fig, axes = plt.subplots(1, len(tracks))  # 2 rows: mean +- std, mean btw min max
-  #plot_filled_curve(args, runs, axes[0], aggregator=aggregate_mean_std)
-  plot_filled_curve(args, runs, axes, aggregator=aggregate_mean_min_max)
   outdir.mkdir(parents=True, exist_ok=True)
   timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-  filename = outdir / f'curves_{timestamp}.png'
-  fig.tight_layout(pad=1.0)
-  fig.savefig(filename)
+  for aggregator, fn in zip(['mean_std', 'mean_minmax'], [aggregate_mean_std, aggregate_mean_min_max]):
+    fig, axes = plt.subplots(1, len(tracks), figsize=(3*len(tracks), 3))  # 2 rows: mean +- std, mean btw min max
+    plot_filled_curve(args, runs, axes, aggregator=fn)
+    if args.legend:
+      handles, labels = axes[-1].get_legend_handles_labels()
+      fig.legend(handles, labels, loc='lower center', ncol=3, framealpha=1.0)
+    filename = f'curves_' + '_'.join(tracks) + f'_{aggregator}_{timestamp}.png'
+    fig.tight_layout(pad=1.0)
+    fig.savefig(outdir / filename)
 
 def plot_test_figures(args, outdir):
   runs = load_runs(args)
@@ -265,6 +283,7 @@ def plot_error_bar(args, runs, ax, aggregator):
 
 
 def main(args):
+  assert len(args.hbaseline_names) == len(args.hbaseline_values)
   outdir = args.outdir / f'{args.type}'
   if args.type == 'train':
     args.tag = 'test/progress'
@@ -288,8 +307,11 @@ def parse():
   parser.add_argument('--ylabel', type=str, default="")
   parser.add_argument('--binning', type=int, default=15000)
   parser.add_argument('--legend', action='store_true')
+  parser.add_argument('--show_labels', action='store_true')
   parser.add_argument('--tracks', nargs='+', type=str, default=ALL_TRACKS_DICT.keys())
   parser.add_argument('--methods', nargs='+', type=str, default=ALL_METHODS_DICT.keys())
+  parser.add_argument('--hbaseline_names', nargs='+', type=str, default=[])
+  parser.add_argument('--hbaseline_values', nargs='+', type=float, default=[])
   return parser.parse_args()
 
 
