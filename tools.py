@@ -246,8 +246,6 @@ def summarize_collection(metrics_dict, config, datadir, writer, prefix):
     metrics = [(f'{prefix}/{metric_name}_mean', np.mean(metric_list)),
                (f'{prefix}/{metric_name}_std', np.std(metric_list))]
     step = count_episodes(datadir)[1] * config.action_repeat
-    with (config.logdir / 'metrics.jsonl').open('a') as f:
-      f.write(json.dumps(dict([('step', step)] + metrics)) + '\n')
     with writer.as_default():  # Env might run in a different thread.
       tf.summary.experimental.set_step(step)
       [tf.summary.scalar(k, v) for k, v in metrics]

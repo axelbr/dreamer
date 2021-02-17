@@ -293,6 +293,8 @@ class ActionDecoder(tools.Module):
       x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)   # `training` true only in imagination
       x = tf.reshape(x, [*features.shape[:-1], -1])
       mean, std = tf.split(x, 2, -1)
+      mean = tf.clip_by_value(mean, -1, +1)
+      std = tf.nn.softplus(std) + self._min_std
       dist = tfd.Normal(mean, std)
       dist = tfd.Independent(dist, 1)
     elif self._dist == 'onehot':
