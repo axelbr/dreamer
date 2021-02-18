@@ -97,7 +97,6 @@ def summarize_episode(episodes, outdir, writer, prefix, action_repeat):
     [tf.summary.scalar(k, v) for k, v in metrics]
 
 def make_multi_track_env(tracks, action_repeat, rendering=True):
-  # deprecated
   # note: problem of multi-track racing env with wrapper `OccupancyMapObs` because it initializes the map once
   # ideas to solve this issue? when changing env force the update of occupancy map in wrapper?
   scenarios = [MultiAgentScenario.from_spec(f'scenarios/eval/{track}.yml', rendering=rendering) for track in tracks]
@@ -106,7 +105,6 @@ def make_multi_track_env(tracks, action_repeat, rendering=True):
   env = wrappers.FixedResetMode(env, mode='grid')
   env = wrappers.ActionRepeat(env, action_repeat)
   env = wrappers.ReduceActionSpace(env, low=[0.005, -1.0], high=[1.0, 1.0])
-  env = wrappers.OccupancyMapObs(env)
   return env
 
 def make_single_track_env(track, action_repeat, rendering=True):
@@ -120,6 +118,7 @@ def make_single_track_env(track, action_repeat, rendering=True):
   return env
 
 def wrap_wrt_track(env, action_repeat, outdir, writer, track, checkpoint_id):
+  env = wrappers.OccupancyMapObs(env)
   render_callbacks = []
   render_callbacks.append(lambda videos: save_videos(videos, outdir / 'videos', args.action_repeat, track, checkpoint_id))
   env = wrappers.Render(env, render_callbacks, follow_view=False)
@@ -147,14 +146,14 @@ def main(args):
   basedir, writer = make_log_dir(args)
   base_agent = init_agent(args.agent, args.obs_type)
   print(f"[Info] Agent Variables: {len(base_agent.variables)}")
+  base_env = make_multi_track_env(args.tracks, action_repeat=args.action_repeat, rendering=rendering)
   for i, checkpoint in enumerate(args.checkpoints):
     copy_checkpoint(checkpoint, basedir, checkpoint_id=i+1)
     # load agent
     agent_object, agent = load_checkpoint(args.agent, base_agent, checkpoint)
     for track in args.tracks:
       print(f"[Info] Checkpoint {i + 1}: {checkpoint}, Track: {track}")
-      env = make_single_track_env(track, action_repeat=args.action_repeat, rendering=rendering)
-      env = wrap_wrt_track(env, args.action_repeat, basedir, writer, track, checkpoint_id=i+1)
+      env = wrap_wrt_track(base_env, args.action_repeat, basedir, writer, track, checkpoint_id=i+1)
       for episode in range(args.eval_episodes):
         obs = env.reset()
         done = False
@@ -173,7 +172,7 @@ def main(args):
           done = dones['A']
         if args.save_dreams:
           dream(agent_object, cameras, lidars, occupancies, actions, args.obs_type, basedir)
-      env.close()
+      env.set_next_env()
 
 def dream(agent, cameras, lidars, occupancies, actions, obstype, basedir):
   data = {}
