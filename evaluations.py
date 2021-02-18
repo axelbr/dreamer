@@ -20,9 +20,11 @@ import time
 
 tf.config.run_functions_eagerly(run_eagerly=True)
 
-def init_agent(agent_name: str, obs_type: str, env):
+def init_agent(agent_name: str, obs_type: str):
   if agent_name == "dreamer":
+    env = make_single_track_env('columbia', action_repeat=args.action_repeat, rendering=rendering)
     agent = init_dreamer(env, obs_type)
+    env.close()
   else:
     raise NotImplementedError(f'not implemented {agent_name}')
   return agent
@@ -143,9 +145,7 @@ def main(args):
     tf.config.experimental.set_memory_growth(gpu, True)
   rendering = False
   basedir, writer = make_log_dir(args)
-  env = make_single_track_env('columbia', action_repeat=args.action_repeat, rendering=rendering)
-  base_agent = init_agent(args.agent, args.obs_type, env)
-  env.close()
+  base_agent = init_agent(args.agent, args.obs_type)
   print(f"[Info] Agent Variables: {len(base_agent.variables)}")
   for i, checkpoint in enumerate(args.checkpoints):
     copy_checkpoint(checkpoint, basedir, checkpoint_id=i+1)
