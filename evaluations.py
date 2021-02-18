@@ -55,7 +55,7 @@ def init_dreamer(env, obs_type):
   return dreamer
 
 
-def load_checkpoint(agent_name, base_agent, checkpoint, env):
+def load_checkpoint(agent_name, base_agent, checkpoint):
   if agent_name == "dreamer":
     base_agent.load(checkpoint)
     agent = functools.partial(base_agent, training=False)
@@ -140,19 +140,20 @@ def copy_checkpoint(checkpoint_file, outdir, checkpoint_id):
 def main(args):
   for gpu in tf.config.experimental.list_physical_devices('GPU'):
     tf.config.experimental.set_memory_growth(gpu, True)
-
+  rendering = False
   basedir, writer = make_log_dir(args)
-  #base_env = make_multi_track_env(args.tracks, action_repeat=args.action_repeat, rendering=False)
-  base_env = make_single_track_env(args.tracks[0], action_repeat=args.action_repeat, rendering=False)
-  base_agent = init_agent(args.agent, args.obs_type, base_env)
+  env = make_single_track_env('columbia', action_repeat=args.action_repeat, rendering=rendering)
+  base_agent = init_agent(args.agent, args.obs_type, env)
+  env.close()
   print(f"[Info] Agent Variables: {len(base_agent.variables)}")
   for i, checkpoint in enumerate(args.checkpoints):
     copy_checkpoint(checkpoint, basedir, checkpoint_id=i+1)
     # load agent
-    agent_object, agent = load_checkpoint(args.agent, base_agent, checkpoint, base_env)
+    agent_object, agent = load_checkpoint(args.agent, base_agent, checkpoint)
     for track in args.tracks:
       print(f"[Info] Checkpoint {i + 1}: {checkpoint}, Track: {track}")
-      env = wrap_wrt_track(base_env, args.action_repeat, basedir, writer, track, checkpoint_id=i+1)
+      env = make_single_track_env(track, action_repeat=args.action_repeat, rendering=rendering)
+      env = wrap_wrt_track(env, args.action_repeat, basedir, writer, track, checkpoint_id=i+1)
       for episode in range(args.eval_episodes):
         obs = env.reset()
         done = False
@@ -164,13 +165,14 @@ def main(args):
           actions.append(action.numpy()[0])
           action = {'A': np.array(action[0])}  # dreamer returns action of shape (1,2)
           obs, rewards, dones, info = env.step(action)
-          lidars.append(obs['A']['lidar'])
-          occupancies.append(obs['A']['lidar_occupancy'])
-          cameras.append(env.render(mode='birds_eye'))
+          if args.save_dreams:
+            lidars.append(obs['A']['lidar'])
+            occupancies.append(obs['A']['lidar_occupancy'])
+            cameras.append(env.render(mode='birds_eye'))
           done = dones['A']
-        dream(agent_object, cameras, lidars, occupancies, actions, args.obs_type, basedir)
-      #env.set_next_env()
-  env.close()
+        if args.save_dreams:
+          dream(agent_object, cameras, lidars, occupancies, actions, args.obs_type, basedir)
+      env.close()
 
 
 def dream(agent, cameras, lidars, occupancies, actions, obstype, basedir):
@@ -235,6 +237,7 @@ def parse():
   parser.add_argument('--tracks', nargs='+', type=str, default=tracks)
   parser.add_argument('--eval_episodes', nargs='?', type=int, default=10)
   parser.add_argument('--action_repeat', nargs='?', type=int, default=8)
+  parser.add_argument('--save_dreams', action='store_true')
   return parser.parse_args()
 
 if __name__=="__main__":
