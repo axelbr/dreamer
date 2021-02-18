@@ -575,7 +575,7 @@ def main(config):
     agents = [random_agent for _ in range(train_env.n_agents)]
   elif config.prefill_agent == 'gap_follower':
     gapfollower = GapFollower()
-    fixed_speed = -0.98   # note: motor then scaled between 0-1, then corresponds to small positive value
+    fixed_speed = 0.01   # note: motor then scaled between 0-1, then corresponds to small positive value
     gap_follower_agent = lambda o, d, s: ([np.clip(np.array([fixed_speed, gapfollower.action(o)[-1]]), -1, +1)], None)
     agents = [gap_follower_agent for _ in range(train_env.n_agents)]
   else:

@@ -277,8 +277,11 @@ class ActionDecoder(tools.Module):
       dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
       dist = tfd.Independent(dist, 1)
       dist = tools.SampleDist(dist)
-    elif self._dist == 'unscaled_tanh_normal':   # Like in dreamer, but with linear mean
+    elif self._dist == 'normalized_tanhtransformed_normal':   # Like in dreamer, but with linear mean
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
+      x = tf.reshape(x, [-1, 2 * self._size])
+      x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)  # `training` true only in imagination
+      x = tf.reshape(x, [*features.shape[:-1], -1])
       mean, std = tf.split(x, 2, -1)
       std = tf.nn.softplus(std) + self._min_std
       dist = tfd.Normal(mean, std)
