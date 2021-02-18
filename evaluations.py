@@ -95,6 +95,7 @@ def summarize_episode(episodes, outdir, writer, prefix, action_repeat):
     [tf.summary.scalar(k, v) for k, v in metrics]
 
 def make_multi_track_env(tracks, action_repeat, rendering=True):
+  # deprecated
   # note: problem of multi-track racing env with wrapper `OccupancyMapObs` because it initializes the map once
   # ideas to solve this issue? when changing env force the update of occupancy map in wrapper?
   scenarios = [MultiAgentScenario.from_spec(f'scenarios/eval/{track}.yml', rendering=rendering) for track in tracks]
@@ -172,7 +173,7 @@ def main(args):
           done = dones['A']
         if args.save_dreams:
           dream(agent_object, cameras, lidars, occupancies, actions, args.obs_type, basedir)
-
+      env.close()
 
 def dream(agent, cameras, lidars, occupancies, actions, obstype, basedir):
   data = {}
