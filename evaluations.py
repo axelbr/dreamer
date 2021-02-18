@@ -22,7 +22,7 @@ tf.config.run_functions_eagerly(run_eagerly=True)
 
 def init_agent(agent_name: str, obs_type: str):
   if agent_name == "dreamer":
-    env = make_single_track_env('columbia', action_repeat=args.action_repeat, rendering=rendering)
+    env = make_single_track_env('columbia', action_repeat=args.action_repeat, rendering=False)
     agent = init_dreamer(env, obs_type)
     env.close()
   else:
