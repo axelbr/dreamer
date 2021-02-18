@@ -143,7 +143,8 @@ def main(args):
   rendering = False
   basedir, writer = make_log_dir(args)
   base_env = make_multi_track_env(['columbia'] + args.tracks, action_repeat=args.action_repeat, rendering=rendering)
-  base_agent = init_agent(args.agent, args.obs_type)
+  env = wrappers.OccupancyMapObs(base_env)  # for initialization
+  base_agent = init_agent(args.agent, args.obs_type, env)
   print(f"[Info] Agent Variables: {len(base_agent.variables)}")
   base_env.set_next_env() # skip columbia, used only for initialization
   for i, checkpoint in enumerate(args.checkpoints):

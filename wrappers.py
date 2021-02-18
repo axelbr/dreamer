@@ -370,7 +370,7 @@ class OccupancyMapObs:
 
   def __init__(self, env):
     self._env = env
-    self._occupancy_map = env._scenario.world._maps['occupancy']
+    self._occupancy_map = env.scenario.world._maps['occupancy']
 
   def __getattr__(self, name):
     return getattr(self._env, name)
