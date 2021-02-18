@@ -172,7 +172,6 @@ def main(args):
           done = dones['A']
         if args.save_dreams:
           dream(agent_object, cameras, lidars, occupancies, actions, args.obs_type, basedir)
-      env.close()
 
 
 def dream(agent, cameras, lidars, occupancies, actions, obstype, basedir):
