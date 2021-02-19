@@ -18,7 +18,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import time
 
-tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)   # we need it to resume a model without need of same batchlen
 
 def init_agent(agent_name: str, obs_type: str, env):
   if agent_name == "dreamer":
@@ -146,13 +146,14 @@ def main(args):
   env = wrappers.OccupancyMapObs(base_env)  # for initialization
   base_agent = init_agent(args.agent, args.obs_type, env)
   print(f"[Info] Agent Variables: {len(base_agent.variables)}")
-  base_env.set_next_env() # skip columbia, used only for initialization
   for i, checkpoint in enumerate(args.checkpoints):
     copy_checkpoint(checkpoint, basedir, checkpoint_id=i+1)
     # load agent
     agent_object, agent = load_checkpoint(args.agent, base_agent, checkpoint)
     for track in args.tracks:
       print(f"[Info] Checkpoint {i + 1}: {checkpoint}, Track: {track}")
+      while base_env.scenario.world._config.name != track:
+        base_env.set_next_env()
       env = wrap_wrt_track(base_env, args.action_repeat, basedir, writer, track, checkpoint_id=i+1)
       for episode in range(args.eval_episodes):
         obs = env.reset()
@@ -172,7 +173,6 @@ def main(args):
           done = dones['A']
         if args.save_dreams:
           dream(agent_object, cameras, lidars, occupancies, actions, args.obs_type, basedir)
-      env.set_next_env()
 
 def dream(agent, cameras, lidars, occupancies, actions, obstype, basedir):
   data = {}
@@ -240,5 +240,7 @@ def parse():
   return parser.parse_args()
 
 if __name__=="__main__":
+  init = time.time()
   args = parse()
   main(args)
+  print(f"\n[Info] Elapsed Time: {time.time()-init:.3f} seconds")

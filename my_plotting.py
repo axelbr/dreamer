@@ -1,5 +1,6 @@
 import argparse
 import pathlib
+import time
 from typing import Tuple
 
 import pandas as pd
@@ -88,6 +89,8 @@ def load_runs(args):
             tag = args.tag
             y = np.array([float(scalar.value) for scalar in event_acc.Scalars(tag)])
             x = np.array([int(scalar.step) for scalar in event_acc.Scalars(tag)])
+          else:
+            continue
           if 'sac' in method or 'ppo' in method:    # to be consistent with logs collected with sb3
             x = x * 4
           runs.append(Run(filepath, train_track, train_track, method, seed, x, y))  # in this case, train track = test track
@@ -283,10 +286,11 @@ def plot_error_bar(args, runs, ax, aggregator):
 
 
 def main(args):
+  init = time.time()
   assert len(args.hbaseline_names) == len(args.hbaseline_values)
   outdir = args.outdir / f'{args.type}'
   if args.type == 'train':
-    args.tag = 'test/progress'
+    args.tag = 'test/progress_mean'
     plot_train_figures(args, outdir)
   elif args.type == 'test':
     args.tag = 'progress'     # it will be composed as f'{track}/progress'
@@ -296,6 +300,7 @@ def main(args):
     get_best_performing_models(args, n_models=5)
   else:
     raise NotImplementedError(f'not implemented type = {args.type}')
+  print(f"\n[Info] Elapsed Time: {time.time()-init:.3f} seconds")
 
 
 def parse():
