@@ -277,6 +277,16 @@ class ActionDecoder(tools.Module):
       dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
       dist = tfd.Independent(dist, 1)
       dist = tools.SampleDist(dist)
+    elif self._dist == 'tanh_normal_factor2':  # As Original, with different scaling factors
+      # https://www.desmos.com/calculator/rcmcf5jwe7
+      x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
+      mean, std = tf.split(x, 2, -1)
+      mean = 2 * tf.tanh(mean / 2)
+      std = tf.nn.softplus(std) + self._min_std
+      dist = tfd.Normal(mean, std)
+      dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
+      dist = tfd.Independent(dist, 1)
+      dist = tools.SampleDist(dist)
     elif self._dist == 'normalized_tanhtransformed_normal':   # Like in dreamer, but with linear mean
       x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
       x = tf.reshape(x, [-1, 2 * self._size])
