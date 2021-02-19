@@ -242,7 +242,7 @@ def plot_train_figures(args, outdir):
     plot_filled_curve(args, runs, axes, aggregator=fn)
     if args.legend:
       handles, labels = axes[-1].get_legend_handles_labels()
-      fig.legend(handles, labels, loc='lower center', ncol=3, framealpha=1.0)
+      fig.legend(handles, labels, loc='lower center', ncol=len(labels), framealpha=1.0)
     filename = f'curves_' + '_'.join(tracks) + f'_{aggregator}_{timestamp}.png'
     fig.tight_layout(pad=1.0)
     fig.savefig(outdir / filename)
