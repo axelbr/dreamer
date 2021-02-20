@@ -474,7 +474,7 @@ def make_train_env(config, writer, datadir, gui=False):
   if env.n_agents > 1:
     env = wrappers.FixedResetMode(env, mode='random_ball')    # sample in random points close to each other
   else:
-    env = wrappers.FixedResetMode(env, mode='random')
+    env = wrappers.FixedResetMode(env, mode='random_bidirectional')
   env = wrappers.TimeLimit(env, config.time_limit_train / config.action_repeat)
   callbacks = []
   callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
@@ -575,7 +575,7 @@ def main(config):
     agents = [random_agent for _ in range(train_env.n_agents)]
   elif config.prefill_agent == 'gap_follower':
     gapfollower = GapFollower()
-    fixed_speed = 0.01   # note: motor then scaled between 0-1, then corresponds to small positive value
+    fixed_speed = -0.96   # note: motor then scaled between 0-1
     gap_follower_agent = lambda o, d, s: ([np.clip(np.array([fixed_speed, gapfollower.action(o)[-1]]), -1, +1)], None)
     agents = [gap_follower_agent for _ in range(train_env.n_agents)]
   else:

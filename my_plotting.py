@@ -17,13 +17,16 @@ PALETTE = 10 * (
     '#f781bf', '#888888', '#a6cee3', '#b2df8a', '#cab2d6', '#fb9a99',
     '#fdbf6f')
 
-ALL_TRACKS_DICT = {'austria': 'AUSTRIA', 'barcelona': 'BRC', 'columbia': 'COLUMBIA',
-                   'gbr': 'GBR', 'treitlstrasse': 'LECTURE HALL',
-                   'treitlstrasse_v2': 'LECTURE HALL', 'treitlstrassev2': 'LECTURE HALL'}
+ALL_TRACKS_DICT = {'austria': 'AUT', 'barcelona': 'BRC', 'columbia': 'COL',
+                   'gbr': 'GBR', 'treitlstrasse': 'HALL',
+                   'treitlstrasse_v2': 'HALL', 'treitlstrassev2': 'HALL'}
 ALL_METHODS_DICT = {'dreamer': 'Dream', 'mpo': 'MPO', 'd4pg': 'D4PG', 'ppo': 'PPO', 'sac': 'SAC'}
 DREAMER_CONFS = {}
 Run = collections.namedtuple('Run', 'logdir train_track test_track method seed x y')
 
+BEST_MFREE_PERFORMANCES = {'austria': {'d4pg': 0.38, 'mpo': 0.36, 'ppo': 0.36, 'sac': 0.13},
+                           'columbia': {'d4pg': 2.06, 'mpo': 2.13, 'ppo': 2.07, 'sac': 1.73},
+                           'treitlstrassev2': {'d4pg': 0.77, 'mpo': 0.30, 'ppo': 0.6, 'sac': 0.31}}
 def process_logdir_name(logdir):
   splitted = logdir.split('_')
   if len(splitted) == 4:  # assume logdir: eval_algo_traintrack_timestamp
@@ -85,8 +88,16 @@ def load_runs(args):
             tag = args.tag
             y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
             x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
+          elif args.tag + "_mean" in event_acc.Tags()['tensors']:
+            tag = args.tag + "_mean"  # todo, remove it with new experiment runs, use only progress_mean
+            y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
+            x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
           elif args.tag in event_acc.Tags()['scalars']:
             tag = args.tag
+            y = np.array([float(scalar.value) for scalar in event_acc.Scalars(tag)])
+            x = np.array([int(scalar.step) for scalar in event_acc.Scalars(tag)])
+          elif args.tag + "_mean" in event_acc.Tags()['scalars']:
+            tag = args.tag + "_mean"  # todo, remove it with new experiment runs, use only progress_mean
             y = np.array([float(scalar.value) for scalar in event_acc.Scalars(tag)])
             x = np.array([int(scalar.step) for scalar in event_acc.Scalars(tag)])
           else:
@@ -97,6 +108,8 @@ def load_runs(args):
           print('.', end='')
         else:
           for test_track in ALL_TRACKS_DICT.keys():
+            if not test_track in args.tracks:
+              continue
             if f'{test_track}/{args.tag}' in event_acc.Tags()['tensors']:
               tag = f'{test_track}/{args.tag}'
             else:
@@ -207,9 +220,12 @@ def plot_filled_curve(args, runs, axes, aggregator):
     min_x = np.min(np.concatenate([r.x for r in track_runs]))
     max_x = np.max(np.concatenate([r.x for r in track_runs]))
     for j, (value, name) in enumerate(zip(args.hbaseline_values, args.hbaseline_names)):
-      color = PALETTE[len(methods) + j]
-      ax.hlines(y=value, xmin=min_x, xmax=max_x, color=color, linestyle='dashed', label=name.upper())
-
+      color = 'red'
+      ax.hlines(y=value, xmin=min_x, xmax=max_x, color=color, linestyle='dotted', label=name.upper())
+    if args.show_mfree_baselines:
+      for j, (name, value) in enumerate(BEST_MFREE_PERFORMANCES[track].items()):
+        color = PALETTE[len(methods) + len(args.hbaseline_values) + j]
+        ax.hlines(y=value, xmin=min_x, xmax=max_x, color=color, linestyle='dashed', label=name.upper())
 
 
 def aggregate_max(runs):
@@ -246,21 +262,22 @@ def plot_train_figures(args, outdir):
     filename = f'curves_' + '_'.join(tracks) + f'_{aggregator}_{timestamp}.png'
     fig.tight_layout(pad=1.0)
     fig.savefig(outdir / filename)
+    print(f"[Info] Written {outdir / filename}")
 
 def plot_test_figures(args, outdir):
   runs = load_runs(args)
   train_tracks = sorted(set([r.train_track for r in runs]))
-  fig, axes = plt.subplots(2, len(train_tracks))
-  for i, aggregator in enumerate([aggregate_mean_std, aggregate_mean_min_max]):
+  timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+  outdir.mkdir(parents=True, exist_ok=True)
+  for aggregator, fn in zip(['mean_std', 'mean_minmax'], [aggregate_mean_std, aggregate_mean_min_max]):
+    fig, axes = plt.subplots(1, len(train_tracks), figsize=(3 * len(train_tracks), 3))  # 2 rows: mean +- std, mean btw min max
     for j, train_track in enumerate(train_tracks):
       filter_runs = [r for r in runs if r.train_track == train_track]
-      ax = axes[i][j]
-      plot_error_bar(args, filter_runs, ax, aggregator=aggregator)
-  outdir.mkdir(parents=True, exist_ok=True)
-  timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-  filename = outdir / f'curves_{timestamp}.png'
-  fig.tight_layout(pad=1.0)
-  fig.savefig(filename)
+      ax = axes[j]
+      plot_error_bar(args, filter_runs, ax, aggregator=fn)
+      filename = outdir / f'curves_{aggregator}_{timestamp}.png'
+      fig.tight_layout(pad=1.0)
+      fig.savefig(filename)
 
 def plot_error_bar(args, runs, ax, aggregator):
   train_track = sorted(set([r.train_track for r in runs]))
@@ -275,7 +292,7 @@ def plot_error_bar(args, runs, ax, aggregator):
       means.append(mean[0])
       n_errors.append(mean[0]-min[0])
       p_errors.append(max[0]-mean[0])
-      colors.append('green' if train_track==test_track else 'red')
+      colors.append('green' if ALL_TRACKS_DICT[train_track]==ALL_TRACKS_DICT[test_track] else 'red')
   xpos = np.arange(len(test_tracks))
   ax.bar(xpos, means, yerr=np.array([n_errors, p_errors]), align='center', alpha=0.5, color=colors, ecolor='black', capsize=10)
   ax.set_xticks(xpos)
@@ -290,7 +307,7 @@ def main(args):
   assert len(args.hbaseline_names) == len(args.hbaseline_values)
   outdir = args.outdir / f'{args.type}'
   if args.type == 'train':
-    args.tag = 'test/progress_mean'
+    args.tag = 'test/progress'
     plot_train_figures(args, outdir)
   elif args.type == 'test':
     args.tag = 'progress'     # it will be composed as f'{track}/progress'
@@ -313,6 +330,7 @@ def parse():
   parser.add_argument('--binning', type=int, default=15000)
   parser.add_argument('--legend', action='store_true')
   parser.add_argument('--show_labels', action='store_true')
+  parser.add_argument('--show_mfree_baselines', action='store_true')
   parser.add_argument('--tracks', nargs='+', type=str, default=ALL_TRACKS_DICT.keys())
   parser.add_argument('--methods', nargs='+', type=str, default=ALL_METHODS_DICT.keys())
   parser.add_argument('--hbaseline_names', nargs='+', type=str, default=[])
