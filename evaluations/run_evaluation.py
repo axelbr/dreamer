@@ -48,9 +48,10 @@ def glob_checkpoints(checkpoint_dir, track, agent, obs_type="*"):
 def main(args):
     # find all checkpoints in `checkpoint_dir` for the given agent` and training track
     checkpoints = glob_checkpoints(args.checkpoint_dir, args.trained_on, args.agent, args.obs_type)
+    action_repeat = 8 if args.agent == "dreamer" else 4
     rendering = False
     basedir, writer = make_log_dir(args)
-    base_env = make_multi_track_env(args.tracks, action_repeat=args.action_repeat,
+    base_env = make_multi_track_env(args.tracks, action_repeat=action_repeat,
                                     rendering=rendering, is_dreamer=args.agent=="dreamer")
     agent = RacingAgent(args.agent, checkpoints[0], obs_type=args.obs_type, action_dist=args.action_dist)
     # iterate over checkpoint list: for each one run `eval_episodes` over each track
@@ -65,7 +66,7 @@ def main(args):
             while base_env.scenario.world._config.name != track:
                 base_env.set_next_env()
             # wrap it to adapt logging to the current track
-            env = wrap_wrt_track(base_env, args.action_repeat, basedir, writer, track, checkpoint_id=i + 1)
+            env = wrap_wrt_track(base_env, action_repeat, basedir, writer, track, checkpoint_id=i + 1)
             # run eval episodes
             for episode in range(args.eval_episodes):
                 obs = env.reset()
@@ -87,7 +88,6 @@ def parse():
     parser.add_argument('--agent', type=str, choices=agents, required=True)
     parser.add_argument('--obs_type', type=str, choices=["lidar", "lidar_occupancy"], required=True)
     parser.add_argument('--action_dist', type=str, choices=["tanh_normal"], required=False, default="tanh_normal")
-    parser.add_argument('--action_repeat', nargs='?', type=int, default=8)
     parser.add_argument('--checkpoint_dir', type=pathlib.Path, required=False)
     parser.add_argument('--trained_on', type=str, required=True, choices=tracks)
     parser.add_argument('--tracks', nargs='+', type=str, default=tracks)
