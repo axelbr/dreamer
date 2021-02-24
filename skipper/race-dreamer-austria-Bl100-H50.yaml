@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: race-dreamer-austria
+  name: race-dream-austria
 spec:
   containers:
     - name: skipper-pod
-      image: raminmh/dreamer:latest
+      image: raminmh/dream:latest
       command:
         - "/bin/bash"
         - "-c" # run with bash and pass in the args below
       args:
-        - "python dreamer.py \
+        - "python dream.py \
         --task racecar_austria \
         --logdir /data/race_dreamer/logs \
         --log_images False \

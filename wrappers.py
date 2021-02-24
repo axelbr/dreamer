@@ -34,6 +34,10 @@ class RaceCarWrapper:
     return getattr(self._env, name)
 
   @property
+  def scenario(self):
+      return self._env.scenario
+
+  @property
   def agent_ids(self):
     return list(self._env.observation_space.spaces.keys())   # multi-agent ids
 

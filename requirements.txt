@@ -8,3 +8,5 @@ matplotlib
 rlephant
 imageio
 imageio-ffmpeg
+stable-baselines3   # for evaluation of mfree methods
+torch               # for evaluation of mfree methods

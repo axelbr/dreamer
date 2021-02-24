@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: race-dreamer-treitlstrasse-h20-bl50
+  name: race-dream-treitlstrasse-h20-bl50
 spec:
   containers:
     - name: skipper-pod
-      image: raminmh/dreamer:latest
+      image: raminmh/dream:latest
       command:
         - "/bin/bash"
         - "-c" # run with bash and pass in the args below
       args:
-        - "python dreamer.py \
+        - "python dream.py \
         --task max_progress \
         --track treitlstrasse \
         --obs_type lidar \

@@ -1,0 +1,105 @@
+import functools
+import glob
+import pathlib
+import shutil
+import numpy as np
+
+import imageio
+import argparse
+
+import tools
+from dreamer import preprocess
+
+import tensorflow as tf
+import matplotlib.pyplot as plt
+import time
+
+from evaluations.racing_agent import RacingAgent
+from evaluations.make_env import make_multi_track_env, wrap_wrt_track
+from evaluations.utils import make_log_dir
+
+tf.config.run_functions_eagerly(run_eagerly=True)  # we need it to resume a model without need of same batchlen
+
+for gpu in tf.config.experimental.list_physical_devices('GPU'):
+    tf.config.experimental.set_memory_growth(gpu, True)
+
+
+def copy_checkpoint(agent, checkpoint_file, outdir, checkpoint_id):
+    if agent in ["dreamer", "sac", "ppo"]:
+        cp_dir = outdir / f'checkpoints/{checkpoint_id}'
+        cp_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(checkpoint_file, cp_dir)    # copy file
+    else:
+        cp_dir = outdir / 'checkpoints'     #dest dir must not exist before
+        cp_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(checkpoint_file, cp_dir / f'{checkpoint_id}')   # copy dir
+
+def get_checkpoint_regex(checkpoint_dir, track, agent, obs_type):
+    return str(checkpoint_dir / f'{track}_{agent}_{obs_type}_[0-9]*')
+
+def glob_checkpoints(checkpoint_dir, track, agent, obs_type="*"):
+    regex = get_checkpoint_regex(checkpoint_dir, track, agent, obs_type)
+    checkpoints = glob.glob(regex)
+    print(f"[Info] Found {len(checkpoints)} checkpoint")
+    if len(checkpoints) == 0:
+        raise FileNotFoundError(f"No checkpoint matching {regex}")
+    return checkpoints
+
+def main(args):
+    # find all checkpoints in `checkpoint_dir` for the given agent` and training track
+    checkpoints = glob_checkpoints(args.checkpoint_dir, args.trained_on, args.agent, args.obs_type)
+    rendering = False
+    basedir, writer = make_log_dir(args)
+    base_env = make_multi_track_env(args.tracks, action_repeat=args.action_repeat,
+                                    rendering=rendering, is_dreamer=args.agent=="dreamer")
+    agent = RacingAgent(args.agent, checkpoints[0], obs_type=args.obs_type, action_dist=args.action_dist)
+    # iterate over checkpoint list: for each one run `eval_episodes` over each track
+    for i, checkpoint in enumerate(checkpoints):
+        # load the model checkpoint and copy it to the log dir
+        agent.load(checkpoint)
+        copy_checkpoint(args.agent, checkpoint, basedir, checkpoint_id=i + 1)
+        # iterate over the evaluation tracks: for each run a number of eval episodes
+        for track in args.tracks:
+            print(f"[Info] Checkpoint {i + 1}: {checkpoint}, Track: {track}")
+            # change track until find the current one
+            while base_env.scenario.world._config.name != track:
+                base_env.set_next_env()
+            # wrap it to adapt logging to the current track
+            env = wrap_wrt_track(base_env, args.action_repeat, basedir, writer, track, checkpoint_id=i + 1)
+            # run eval episodes
+            for episode in range(args.eval_episodes):
+                obs = env.reset()
+                done = False
+                agent_state = None
+                while not done:
+                    obs = {id: {k: np.stack([v]) for k, v in o.items()} for id, o in
+                           obs.items()}  # dream needs size (1, 1080)
+                    action, agent_state = agent.action(obs=obs['A'], reset=np.array([done]), state=agent_state)
+                    action = {'A': np.array(action)}
+                    obs, rewards, dones, info = env.step(action)
+                    done = dones['A']
+
+
+def parse():
+    tracks = ['austria', 'columbia', 'barcelona', 'gbr', 'treitlstrasse_v2']
+    agents = ["dreamer", "d4pg", "mpo", "ppo", "sac"]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--agent', type=str, choices=agents, required=True)
+    parser.add_argument('--obs_type', type=str, choices=["lidar", "lidar_occupancy"], required=True)
+    parser.add_argument('--action_dist', type=str, choices=["tanh_normal"], required=False, default="tanh_normal")
+    parser.add_argument('--action_repeat', nargs='?', type=int, default=8)
+    parser.add_argument('--checkpoint_dir', type=pathlib.Path, required=False)
+    parser.add_argument('--trained_on', type=str, required=True, choices=tracks)
+    parser.add_argument('--tracks', nargs='+', type=str, default=tracks)
+    parser.add_argument('--outdir', type=pathlib.Path, required=True)
+    parser.add_argument('--eval_episodes', nargs='?', type=int, default=10)
+    parser.add_argument('--save_dreams', action='store_true')
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    init = time.time()
+    args = parse()
+    assert args.agent == "gap_follower" or args.checkpoint_dir is not None
+    main(args)
+    print(f"\n[Info] Elapsed Time: {time.time() - init:.3f} seconds")
