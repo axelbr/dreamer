@@ -1,17 +1,9 @@
-import functools
 import glob
 import pathlib
 import shutil
 import numpy as np
-
-import imageio
 import argparse
-
-import tools
-from dreamer import preprocess
-
 import tensorflow as tf
-import matplotlib.pyplot as plt
 import time
 
 from evaluations.racing_agent import RacingAgent
