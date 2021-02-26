@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from typing import Tuple
-
+from plotting.structs import OBSTYPE_DICT
 
 class Parser():
     @abstractmethod
@@ -12,7 +12,6 @@ class ModelFreeParser(Parser):
         splitted = logdir.split('_')
         if len(splitted) == 6:  # assume logdir: track_dreamer_max_progress_seed_timestamp
             track, algo, _, _, seed, _ = splitted
-            base_algo = ''
         else:
             raise NotImplementedError(f'cannot parse {logdir}')
         seed = int(seed)
@@ -24,9 +23,13 @@ class EvaluationParser(Parser):
     def __call__(self, logdir):
         # format: eval_algorithm_trainingtrack_timestamp
         splitted = logdir.split('_')
-        assert len(splitted) == 4
-        _, algo, track, _ = splitted
-        seed = -1
+        if len(splitted) == 5:
+            _, algo, track, obs_type, _ = splitted
+            if algo == "dreamer":
+                algo = f"{algo}+{OBSTYPE_DICT[obs_type]}"
+            seed = -1
+        else:
+            raise NotImplementedError(f'cannot parse {logdir}')
         return track, algo, seed
 
 class DreamerParser(Parser):

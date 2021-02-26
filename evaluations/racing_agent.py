@@ -20,9 +20,9 @@ class RacingAgent():
         if algorithm == 'dreamer':
             from .dream import RacingDreamer
             self._agent = RacingDreamer(checkpoint_path=checkpoint_path, **kwargs)
-        elif algorithm == 'gap_follower':
-            from .gapfollower import RacingDreamer
-            self._agent = RacingDreamer()
+        elif algorithm == 'ftg':
+            from .gapfollower import RacingAgent
+            self._agent = RacingAgent()
         elif algorithm in ['sac', 'ppo']:
             from .sb3 import RacingAgent as Sb3Agent
             self._agent = Sb3Agent(algorithm=algorithm, checkpoint_path=checkpoint_path)

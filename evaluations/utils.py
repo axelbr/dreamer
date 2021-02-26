@@ -8,7 +8,7 @@ from dreamer import preprocess
 import tools
 
 def make_log_dir(args):
-  out_dir = args.outdir / f'eval_{args.agent}_{args.trained_on}_{time.time()}'
+  out_dir = args.outdir / f'eval_{args.agent}_{args.trained_on.replace("_", "")}_{args.obs_type.replace("_", "")}_{time.time()}'
   out_dir.mkdir(parents=True, exist_ok=True)
   writer = tf.summary.create_file_writer(str(out_dir), max_queue=1000, flush_millis=20000)
   writer.set_as_default()

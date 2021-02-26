@@ -18,7 +18,7 @@ def parse_file(dir, file, file_parsers):
             return train_track, method, seed
         except Exception as ex:     # if a parser fails, try to use the next one
             continue
-    raise Exception()   # if all the parsers fail, then raise expection
+    raise Warning(f'cannot parse {file}')   # if all the parsers fail, then raise expection
 
 
 
@@ -28,45 +28,57 @@ def check_track(track, tracks):
 def check_method(method, methods):
     return any([m in method for m in methods])
 
-def load_runs(args, file_parsers, tag):
+def get_tf_data(event_acc, method, tag):
+    x, y = np.array([]), np.array([])
+    if tag in event_acc.Tags()['tensors']:
+        y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
+        x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
+    elif tag + "_mean" in event_acc.Tags()['tensors']:
+        y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag + "_mean")])
+        x = np.array([tensor.step for tensor in event_acc.Tensors(tag + "_mean")])
+    elif tag in event_acc.Tags()['scalars']:
+        y = np.array([float(scalar.value) for scalar in event_acc.Scalars(tag)])
+        x = np.array([int(scalar.step) for scalar in event_acc.Scalars(tag)])
+    elif tag + "_mean" in event_acc.Tags()['scalars']:
+        y = np.array([float(scalar.value) for scalar in event_acc.Scalars(tag + "_mean")])
+        x = np.array([int(scalar.step) for scalar in event_acc.Scalars(tag + "_mean")])
+    if 'sac' in method or 'ppo' in method:  # because we cannot scale steps in sb3 based on action_repeat
+        x = x * 4
+    return x, y
+
+
+def load_runs(args, file_parsers, tag, eval_mode=False):
   runs = []
   for dir in args.indir:
     print(f'Loading runs from {dir}', end='')
-    files = list(dir.glob('**/events*'))
-    for file in files:
+    for file in dir.glob('**/events*'):
         try:
             train_track, method, seed = parse_file(dir, file, file_parsers)
-        except Exception as ex:
-            warnings.warn(f"cannot parse {file}")
-            continue
-        if not check_track(train_track, args.tracks) or not check_method(method, args.methods):
-          continue
-        try:
-            event_acc = EventAccumulator(str(file), size_guidance={'scalars': 100000, 'tensors': 100000})  # max number of items to keep
+            if not check_track(train_track, args.tracks) or not check_method(method, args.methods):
+                continue
+            event_acc = EventAccumulator(str(file), size_guidance={'scalars': 100000,
+                                                                   'tensors': 100000})  # max number of items to keep
             event_acc.Reload()
-        except ValueError as err:
-            print(f'Error {file}: {err}')
+        except Warning as w:
+            warnings.warn(w)
             continue
         except Exception as err:
             print(f'Error {file}: {err}')
             continue
-        if tag in event_acc.Tags()['tensors']:
-          y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
-          x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
-        elif tag + "_mean" in event_acc.Tags()['tensors']:
-          y = np.array([float(tf.make_ndarray(tensor.tensor_proto)) for tensor in event_acc.Tensors(tag)])
-          x = np.array([tensor.step for tensor in event_acc.Tensors(tag)])
-        elif tag in event_acc.Tags()['scalars']:
-          y = np.array([float(scalar.value) for scalar in event_acc.Scalars(tag)])
-          x = np.array([int(scalar.step) for scalar in event_acc.Scalars(tag)])
-        elif tag + "_mean" in event_acc.Tags()['scalars']:
-          y = np.array([float(scalar.value) for scalar in event_acc.Scalars(tag)])
-          x = np.array([int(scalar.step) for scalar in event_acc.Scalars(tag)])
+        if eval_mode:
+            for test_track in args.tracks:
+                x, y = get_tf_data(event_acc, method, tag=f'{test_track}/{tag}')
+                if args.first_n_models is not None:
+                    eval_episodes = 10
+                    x = x[:eval_episodes * args.first_n_models]    # to make uniform the eval, consider the same n of models
+                    y = y[:eval_episodes * args.first_n_models]    # for each algorithm
+                if x.shape[0] > 0 and y.shape[0] > 0:
+                    runs.append(Run(file, train_track, test_track, method, seed, x, y))
+                print('.', end='')
         else:
-          continue
-        if 'sac' in method or 'ppo' in method:    # because we cannot scale steps in sb3 based on action_repeat
-          x = x * 4
-        runs.append(Run(file, train_track, train_track, method, seed, x, y))  # in this case, train track = test track
+            x, y = get_tf_data(event_acc, method, tag)
+            if x.shape[0] > 0 and y.shape[0]>0:
+                runs.append(Run(file, train_track, train_track, method, seed, x, y))  # in this case, train track = test track
         print('.', end='')
     print()
   return runs

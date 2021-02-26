@@ -28,7 +28,7 @@ def plot_filled_curve(args, runs, axes, aggregator):
         ax.set_ylabel(args.ylabel)
     track_runs = [r for r in runs if r.train_track == track]
     for j, method in enumerate(methods):
-      color = PALETTE[j]
+      color = PALETTE[j] if 'dreamer' in method else PALETTE[j+2]   # dont use same color for mfree
       filter_runs = [r for r in track_runs if r.method == method]
       if len(filter_runs) > 0:
         x, mean, min, max = aggregator(filter_runs, args.binning)
