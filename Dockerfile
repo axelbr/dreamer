@@ -13,13 +13,11 @@ RUN pip install -r requirements.txt
 WORKDIR /build/src/racecar-gym/models/scenes
 RUN wget https://github.com/axelbr/racecar_gym/releases/download/tracks-v1.0.0/all.zip && unzip all.zip
 
-# WORKDIR /dreamer
-
-# run dreamer
-# ENTRYPOINT ["/usr/bin/python3", "dreamer.py"]
-
 # Switch to src directory
 WORKDIR /src
+
+# add working directory to the python path
+ENV PYTHONPATH "${PYTHONPATH}:/src"
 
 # Copy your code into the docker that is assumed to live in . (on machine)
 COPY ./ /src
