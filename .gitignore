@@ -13,6 +13,4 @@ MUJOCO_LOG.TXT
 events*v2
 /metrics.jsonl
 /logs/
-/export_log/.password
-/export_log/.token
-/export_log/*tar
+/export_log/
