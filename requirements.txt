@@ -1,4 +1,4 @@
-tensorflow==2.3.1
+tensorflow
 tensorflow_probability==0.11.1
 numpy
 gym
@@ -10,3 +10,7 @@ imageio
 imageio-ffmpeg
 stable-baselines3   # for evaluation of mfree methods
 torch               # for evaluation of mfree methods
+tensorboard
+DateTime
+scipy
+Pillow
