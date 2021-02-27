@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from typing import Tuple
-from plotting.structs import OBSTYPE_DICT
+from plotting.structs import OBSTYPE_DICT, ALL_VARIANTS_DICT
+
 
 class Parser():
     @abstractmethod
@@ -48,9 +49,12 @@ class DreamerParser(Parser):
         if len(splitted) == 9:  # assume logdir: track_dreamer_max_progress_ArK_BlL_HH_seed_timestamp
             track, algo, _, _, action_repeat, batch_len, horizon, seed, _ = splitted
             base_algo = algo
-        elif len(splitted) == 10:  # assume logdir: track_dreamer_method_max_progress_ArK_BlL_HH_seed_timestamp
+        elif len(splitted) == 10:  # assume logdir: track_dreamer_max_progress_method_ArK_BlL_HH_seed_timestamp
             track, algo, _, _, method, action_repeat, batch_len, horizon, seed, _ = splitted
-            base_algo = f'{algo}+{method}'
+            if method in ALL_VARIANTS_DICT.keys():
+                base_algo = f'{algo}+{ALL_VARIANTS_DICT[method]}'
+            else:
+                base_algo = f'{algo}+{method}'
         else:
             raise NotImplementedError(f'cannot parse {logdir}')
         current_params = {

@@ -44,4 +44,15 @@ def summarize_episode(episodes, outdir, writer, prefix, action_repeat):
     tf.summary.experimental.set_step(episodes)
     [tf.summary.scalar(k, v) for k, v in metrics]
 
+def save_trajectory(episodes, outdir, action_repeat, track, checkpoint_id):
+  trajectory_dir = outdir / 'trajectories'
+  trajectory_dir.mkdir(parents=True, exist_ok=True)
+  # note: in multi-agent, each agent produce 1 episode
+  episode = episodes[0]  # we save w.r.t. the episode of the first agent
+  episodes = count_videos(outdir / 'videos')
+  positions = episode['pose'][:, :2]
+  velocities = episode['velocity'][:, 0]
+  filename = trajectory_dir / f"trajectory_{episodes}_{track}_checkpoint{checkpoint_id}"
+  np.savez(filename, position=positions, velocity=velocities)
+
 

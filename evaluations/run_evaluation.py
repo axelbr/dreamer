@@ -38,7 +38,7 @@ def glob_checkpoints(checkpoint_dir, track, agent, obs_type="*"):
     return checkpoints
 
 
-def eval_agent(base_env, agent, action_repeat, basedir, writer, checkpoint_id):
+def eval_agent(base_env, agent, action_repeat, basedir, writer, checkpoint_id, save_trajectories):
     # iterate over the evaluation tracks: for each run a number of eval episodes
     for track in args.tracks:
         print(f"[Info] Checkpoint {checkpoint_id + 1}, Track: {track}")
@@ -46,7 +46,8 @@ def eval_agent(base_env, agent, action_repeat, basedir, writer, checkpoint_id):
         while base_env.scenario.world._config.name != track:
             base_env.set_next_env()
         # wrap it to adapt logging to the current track
-        env = wrap_wrt_track(base_env, action_repeat, basedir, writer, track, checkpoint_id=checkpoint_id + 1)
+        env = wrap_wrt_track(base_env, action_repeat, basedir, writer, track,
+                             checkpoint_id=checkpoint_id + 1, save_trajectories=save_trajectories)
         # run eval episodes
         for episode in range(args.eval_episodes):
             obs = env.reset()
@@ -63,14 +64,14 @@ def eval_agent(base_env, agent, action_repeat, basedir, writer, checkpoint_id):
 
 def main(args):
     action_repeat = 8 if args.agent == "dreamer" else 4
-    rendering = True
+    rendering = False
     basedir, writer = make_log_dir(args)
     base_env = make_multi_track_env(args.tracks, action_repeat=action_repeat,
                                     rendering=rendering, is_dreamer=args.agent == "dreamer")
     if args.agent == "ftg":
         # programmed methods (ftg) don't need to iterate over checkpoints
         agent = RacingAgent(args.agent, None, obs_type=args.obs_type, action_dist=args.action_dist)
-        eval_agent(base_env, agent, action_repeat, basedir, writer, 0)
+        eval_agent(base_env, agent, action_repeat, basedir, writer, 0, save_trajectories=args.save_trajectories)
     else:
         # find all checkpoints in `checkpoint_dir` for the given agent` and training track
         checkpoints = glob_checkpoints(args.checkpoint_dir, args.trained_on, args.agent, args.obs_type)
@@ -80,7 +81,7 @@ def main(args):
             # load the model checkpoint and copy it to the log dir
             agent.load(checkpoint)
             copy_checkpoint(args.agent, checkpoint, basedir, checkpoint_id=i + 1)
-            eval_agent(base_env, agent, action_repeat, basedir, writer, i)
+            eval_agent(base_env, agent, action_repeat, basedir, writer, i, save_trajectories=args.save_trajectories)
 
 
 
@@ -99,6 +100,7 @@ def parse():
     parser.add_argument('--outdir', type=pathlib.Path, required=True)
     parser.add_argument('--eval_episodes', nargs='?', type=int, default=10)
     parser.add_argument('--save_dreams', action='store_true')
+    parser.add_argument('--save_trajectories', action='store_true')
     args = parser.parse_args()
     assert args.agent == "ftg" or args.checkpoint_dir is not None
     assert args.agent == "ftg" or args.trained_on in tracks

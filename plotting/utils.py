@@ -1,4 +1,5 @@
 import collections
+import time
 import warnings
 import numpy as np
 import tensorflow as tf
@@ -9,6 +10,7 @@ from plotting.structs import PALETTE, SHORT_TRACKS_DICT, LONG_TRACKS_DICT, ALL_M
 DREAMER_CONFS = {}
 
 Run = collections.namedtuple('Run', 'logdir train_track test_track method seed x y')
+Trajectory = collections.namedtuple('Trajectory', 'logdir train_track test_track method seed x y v')
 
 def parse_file(dir, file, file_parsers):
     filepath = file.relative_to(dir).parts[:-1][0]
@@ -23,7 +25,7 @@ def parse_file(dir, file, file_parsers):
 
 
 def check_track(track, tracks):
-    return track in tracks
+    return track=="" or track in tracks
 
 def check_method(method, methods):
     return any([m in method for m in methods])
@@ -49,15 +51,17 @@ def get_tf_data(event_acc, method, tag):
 
 def load_runs(args, file_parsers, tag, eval_mode=False):
   runs = []
+  init = time.time()
   for dir in args.indir:
-    print(f'Loading runs from {dir}', end='')
+    print(f'Loading runs from {dir}', end='\n')
     for file in dir.glob('**/events*'):
+        print(f"\t[Time:{time.time()-init:.2f}] {file}")
         try:
             train_track, method, seed = parse_file(dir, file, file_parsers)
             if not check_track(train_track, args.tracks) or not check_method(method, args.methods):
                 continue
-            event_acc = EventAccumulator(str(file), size_guidance={'scalars': 100000,
-                                                                   'tensors': 100000})  # max number of items to keep
+            event_acc = EventAccumulator(str(file), size_guidance={'scalars': 1000,
+                                                                   'tensors': 1000})  # max number of items to keep
             event_acc.Reload()
         except Warning as w:
             warnings.warn(w)
@@ -79,9 +83,35 @@ def load_runs(args, file_parsers, tag, eval_mode=False):
             x, y = get_tf_data(event_acc, method, tag)
             if x.shape[0] > 0 and y.shape[0]>0:
                 runs.append(Run(file, train_track, train_track, method, seed, x, y))  # in this case, train track = test track
-        print('.', end='')
     print()
   return runs
+
+
+def load_trajectories(args, file_parsers):
+  trajectories = []
+  for dir in args.indir:
+    print(f'Loading runs from {dir}', end='\n')
+    for file in dir.glob('**/trajectory*'):
+        try:
+            train_track, method, seed = parse_file(dir, file, file_parsers)
+            test_track = file.parts[-1].split("_")[2]
+            checkpoint = file.parts[-1].split("_")[1]
+            method = f"{method}_{checkpoint}"
+            if not check_track(train_track, args.tracks) or not check_method(method, args.methods):
+                continue
+            trajectory = np.load(file)
+            x, y, v = trajectory['position'][:, 0], trajectory['position'][:, 1], trajectory['velocity']
+        except Warning as w:
+            warnings.warn(w)
+            continue
+        except Exception as err:
+            print(f'Error {file}: {err}')
+            continue
+        if x.shape[0] > 0 and y.shape[0] > 0 and v.shape[0] > 0:
+            trajectories.append(Trajectory(file, train_track, test_track, method, seed, x, y, v))
+        print('.', end='')
+    print()
+  return trajectories
 
 def aggregate_max(runs):
     all_x = np.concatenate([r.x for r in runs])
