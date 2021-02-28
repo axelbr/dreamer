@@ -62,7 +62,6 @@ def define_config():
     config.reward_out_dist = 'normal'
     config.dense_act = 'elu'
     config.cnn_act = 'relu'
-    config.cnn_depth = 128
     config.pcont = True
     config.free_nats = 3.0
     config.kl_scale = 1.0
@@ -234,11 +233,11 @@ class Dreamer(tools.Module):
         act = acts[self._c.dense_act]
 
         if self._c.obs_type == 'image':
-            self._encode = models.ConvEncoder(self._c.cnn_depth, cnn_act)
-            self._decode = models.ConvDecoder(self._c.cnn_depth, cnn_act)
+            self._encode = models.ConvEncoder(32, cnn_act)
+            self._decode = models.ConvDecoder(32, cnn_act)
         elif self._c.obs_type == 'lidar':
             self._encode = models.IdentityEncoder()
-            self._decode = models.LidarDistanceDecoder(self._c.cnn_depth, self._obspace['lidar'].shape)
+            self._decode = models.LidarDistanceDecoder(128, self._obspace['lidar'].shape)
         elif self._c.obs_type == 'lidar_occupancy':
             self._encode = models.IdentityEncoder()
             self._decode = models.LidarOccupancyDecoder()
@@ -546,7 +545,7 @@ def main(config):
         str(config.logdir), max_queue=1000, flush_millis=20000)
     writer.set_as_default()
 
-    train_env = make_train_env(config, writer, datadir, gui=True)
+    train_env = make_train_env(config, writer, datadir, gui=False)
     test_env = make_test_env(config, writer, datadir, gui=False)
     agent_ids = train_env.agent_ids
 
