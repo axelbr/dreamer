@@ -66,7 +66,7 @@ The checkpoint format depends on the saving procedure (`pkl`, `zip` or directory
 
 The results are stored as tensorflow logs.
 
-# Plotting
+## Plotting
 The plotting module containes several scripts to visualize the results, usually aggregated over multiple experiments.
 
 To plot the learning curves:
