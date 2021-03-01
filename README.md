@@ -80,7 +80,7 @@ To plot the evaluation results:
 python plotting/plot_test_evaluation.py --indir logs/evaluations \
                                         --outdir plots/evaluation_charts \
                                         --methods dreamer mpo \
-                                        --tracks austria
+                                        --tracks austria \
                                         --vis_tracks austria columbia treitlstrasse_v2
 ```
 It will produce the bar charts comparing Dreamer and MPO trained in Austria and evaluated in Austria, Columbia, Treitlstrasse_v2.
