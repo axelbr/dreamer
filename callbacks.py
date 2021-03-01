@@ -26,7 +26,7 @@ def save_videos(videos, config, datadir):
         writer.close()
 
 
-def save_videos(videos, video_dir, action_repeat, track, checkpoint_id):
+def save_eval_videos(videos, video_dir, action_repeat, track, checkpoint_id):
     # this is used in the evaluation
     video_dir.mkdir(parents=True, exist_ok=True)
     episodes = tools.count_videos(video_dir)
