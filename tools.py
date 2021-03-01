@@ -1,4 +1,5 @@
 import datetime
+import functools
 import io
 import math
 import pathlib
@@ -225,19 +226,9 @@ def count_episodes(directory):
     return episodes, steps
 
 
-def save_episodes(directory, episodes):
-    directory = pathlib.Path(directory).expanduser()
-    directory.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
-    for episode in episodes:
-        identifier = str(uuid.uuid4().hex)
-        length = len(episode['reward'])
-        filename = directory / f'{timestamp}-{identifier}-{length}.npz'
-        with io.BytesIO() as f1:
-            np.savez_compressed(f1, **episode)
-            f1.seek(0)
-            with filename.open('wb') as f2:
-                f2.write(f1.read())
+def count_steps(datadir, config):
+    return count_episodes(datadir)[1] * config.action_repeat
+
 
 
 def load_episodes(directory, rescan, length=None, balance=False, seed=0):
@@ -270,6 +261,40 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
                     index = int(random.randint(0, available + 1))  # +1 for include the last step in the sampled episode
                 episode = {k: v[index: index + length] for k, v in episode.items()}
             yield episode
+
+def preprocess(obs, config):
+    dtype = prec.global_policy().compute_dtype
+    obs = obs.copy()
+    with tf.device('cpu:0'):
+        if 'image' in obs:
+            obs['image'] = tf.cast(obs['image'], dtype) / 255.0 - 0.5
+        if 'lidar' in obs:
+            obs['lidar'] = tf.cast(obs['lidar'], dtype) / 15.0 - 0.5
+        if 'lidar_occupancy' in obs:
+            # note: when using `lidar_occupancy` the reconstruction models return a Bernoulli distribution
+            # for this reason, we don't center the observation in 0, but let it in [0, 1]
+            obs['lidar_occupancy'] = tf.cast(obs['lidar_occupancy'], dtype)
+        if 'reward' in obs:
+            clip_rewards = dict(none=lambda x: x, tanh=tf.tanh,
+                                clip=lambda x: tf.clip_by_value(x, config.clip_rewards_min, config.clip_rewards_max))[
+                config.clip_rewards]
+            obs['reward'] = clip_rewards(obs['reward'])
+    return obs
+
+
+def load_dataset(directory, config):
+    episode = next(load_episodes(directory, 1))
+    types = {k: v.dtype for k, v in episode.items()}
+    shapes = {k: (None,) + v.shape[1:] for k, v in episode.items()}
+    generator = lambda: load_episodes(
+        directory, config.train_steps, config.batch_length,
+        config.dataset_balance)
+    dataset = tf.data.Dataset.from_generator(generator, types, shapes)
+    dataset = dataset.map(functools.partial(preprocess, config=config))
+    dataset = dataset.batch(config.batch_size, drop_remainder=True)
+    dataset = dataset.prefetch(10)
+    return dataset
+
 
 
 class SampleDist:
@@ -413,7 +438,7 @@ class Adam(tf.Module):
             variables = [module.variables for module in self._modules]
             self._variables = tf.nest.flatten(variables)
             count = sum(np.prod(x.shape) for x in self._variables)
-            print(f'Found {count} {self._name} parameters.')
+            print(f'[Init] Found {count} {self._name} parameters.')
         assert len(loss.shape) == 0, loss.shape
         with tape:
             loss = self._opt.get_scaled_loss(loss)
