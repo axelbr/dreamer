@@ -49,10 +49,10 @@ class Dreamer(tools.Module):
             if self._should_train(step):  # call it only when training
                 log = self._should_log(step)
                 n = self._c.pretrain if self._should_pretrain() else self._c.train_steps
-                print(f'Training for {n} steps.')
+                print(f'[Info] Training for {n} steps.')
                 with self._strategy.scope():
                     for train_step in range(n):
-                        print(f'[Train Step] # {train_step}')
+                        print(f'\t[Train Step] # {train_step}')
                         log_images = self._c.log_images and log and train_step == 0
                         self.train(next(self._dataset), log_images)
                 if log:

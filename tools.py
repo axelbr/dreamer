@@ -253,7 +253,7 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
                 total = len(next(iter(episode.values())))
                 available = total - length
                 if available < 1:
-                    print(f'Skipped short episode of length {available}.')
+                    print(f'[Info] Skipped short episode of length {available}.')
                     continue
                 if balance:
                     index = min(random.randint(0, total), available)
