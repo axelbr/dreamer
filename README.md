@@ -47,7 +47,7 @@ python3 dreamer.py --track columbia --obs_type lidar_occupancy
 Please, refer to `dreamer.py` for the other command-line arguments.
 
 ### Offline Evaluation
-The evaluation module runs offline testing of a trained agent (Dreamer, D4PG, MPO, PPO, SAC) or a programmed agent (Follow The Gap).
+The evaluation module runs offline testing of a trained agent (Dreamer, D4PG, MPO, PPO, SAC).
 
 To run evaluation:
 ```
