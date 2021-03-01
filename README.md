@@ -49,12 +49,6 @@ Please, refer to `dreamer.py` for the other command-line arguments.
 ### Offline Evaluation
 The evaluation module runs offline testing of a trained agent (Dreamer, D4PG, MPO, PPO, SAC) or a programmed agent (Follow The Gap).
 
-The user must specify the training track (e.g., `--trained_on austria`) and the observation type (e.g. `--obs_type lidar_occupancy`).
-The user must provide a checkpoint in the format `checkpoint_dir/track_agent_obstype_id*`.
-
-The user can control the number of evaluation episodes (e.g., `--eval_episode 10`),
-the list of evaluation tracks (e.g., `--tracks austria columbia`).
-
 To run evaluation:
 ```
 python evaluations/run_evaluation.py --agent dreamer \
@@ -67,10 +61,10 @@ python evaluations/run_evaluation.py --agent dreamer \
 ```
 The script will look for all the checkpoints with pattern `logs/checkpoints/austria_dreamer_lidar_*`
 
-# TODO
+The results are stored as tensorflow logs.
 
-Generate plots:
-# TODO
+# Plotting
+TODO
 
 
 ## Instructions with Docker
