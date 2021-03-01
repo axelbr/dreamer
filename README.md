@@ -25,10 +25,12 @@ efficiently learn a long-horizon policy.
 
 ## Instructions
 
+This code has been tested on `Ubuntu 18.04` with `Python 3.7`.
+ 
 Get dependencies:
 
 ```
-pip3 install --user -r requirements.txt
+pip install --user -r requirements.txt
 ```
 
 ### Training
@@ -100,11 +102,11 @@ docker build -t dreamer .
 
 To train Dreamer within the container:
 ```
-docker run    
-    -u $(id -u):$(id -g) 
-    -v $(pwd):/src    
-    --gpus all
-    --rm dreamer
+docker run \
+    -u $(id -u):$(id -g) \ 
+    -v $(pwd):/src \
+    --gpus all \
+    --rm dreamer \
     python dreamer.py --track columbia --steps 1000000
 ```
 
