@@ -78,7 +78,6 @@ def load_runs(args, file_parsers, tag, eval_mode=False):
                     y = y[:eval_episodes * args.first_n_models]    # for each algorithm
                 if x.shape[0] > 0 and y.shape[0] > 0:
                     runs.append(Run(file, train_track, test_track, method, seed, x, y))
-                print('.', end='')
         else:
             x, y = get_tf_data(event_acc, method, tag)
             if x.shape[0] > 0 and y.shape[0]>0:

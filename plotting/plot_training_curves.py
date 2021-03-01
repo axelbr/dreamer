@@ -25,11 +25,10 @@ def plot_filled_curve(args, runs, axes, aggregator):
     if not type(axes) == np.ndarray:
         axes = [axes]
     for i, (track, ax) in enumerate(zip(tracks, axes)):
-        if args.show_labels:
-            ax.set_title(LONG_TRACKS_DICT[track].upper())
-            ax.set_xlabel(args.xlabel)
-            if i <= 0:  # show y label only on first row
-                ax.set_ylabel(args.ylabel)
+        ax.set_title(LONG_TRACKS_DICT[track].upper())
+        ax.set_xlabel(args.xlabel)
+        if i <= 0:  # show y label only on first row
+            ax.set_ylabel(args.ylabel)
         track_runs = [r for r in runs if r.train_track == track]
         for j, method in enumerate(sorted(methods, key=sort_methods)):
             if method in COLORS.keys():
@@ -101,7 +100,6 @@ def parse():
     parser.add_argument('--ylabel', type=str, default="")
     parser.add_argument('--binning', type=int, default=15000)
     parser.add_argument('--legend', action='store_true')
-    parser.add_argument('--show_labels', action='store_true')
     parser.add_argument('--show_mfree_baselines', action='store_true')
     parser.add_argument('--show_dreamer_baselines', action='store_true')
     parser.add_argument('--tracks', nargs='+', type=str, default=LONG_TRACKS_DICT.keys())

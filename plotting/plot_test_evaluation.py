@@ -89,7 +89,6 @@ def parse():
     parser.add_argument('--xlabel', type=str, default="")
     parser.add_argument('--ylabel', type=str, default="")
     parser.add_argument('--legend', action='store_true')
-    parser.add_argument('--show_labels', action='store_true')
     parser.add_argument('--tracks', nargs='+', type=str, default=LONG_TRACKS_DICT.keys())
     parser.add_argument('--vis_tracks', nargs='+', type=str, default=LONG_TRACKS_DICT.keys())
     parser.add_argument('--methods', nargs='+', type=str, default=ALL_METHODS_DICT.keys())
