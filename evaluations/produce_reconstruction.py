@@ -9,13 +9,18 @@ from dreamer import preprocess
 import tools
 from evaluations.make_env import make_single_track_env, make_multi_track_env, wrap_wrt_track
 from evaluations.racing_agent import RacingAgent
-from evaluations.utils import make_log_dir
-
 
 tf.config.run_functions_eagerly(run_eagerly=True)   # we need it to resume a model without need of same batchlen
 
 for gpu in tf.config.experimental.list_physical_devices('GPU'):
   tf.config.experimental.set_memory_growth(gpu, True)
+
+def make_log_dir(args):
+  out_dir = args.outdir / f'reconstructions_dreamer_{time.time()}'
+  out_dir.mkdir(parents=True, exist_ok=True)
+  writer = tf.summary.create_file_writer(str(out_dir), max_queue=1000, flush_millis=20000)
+  writer.set_as_default()
+  return out_dir, writer
 
 def save_dreams(basedir, agent, data, embed, image_pred, obs_type='lidar', summary_length=5, skip_frames=10):
     """ Perform dreaming and save the imagined sequences as images.
@@ -83,7 +88,7 @@ def dreaming(agent, cameras, lidars, occupancies, actions, obstype, basedir):
 
 
 def main(args):
-    rendering = True
+    rendering = False
     basedir, writer = make_log_dir(args)
     # in order
     action_repeat = 8
@@ -94,7 +99,8 @@ def main(args):
         agent = RacingAgent("dreamer", checkpoint, obs_type=obs_type, action_dist='tanh_normal')
         agents.append(agent)
     # run eval episodes
-    for episode in range(args.episodes):
+    for i, episode in enumerate(range(args.episodes)):
+        print(f"[Info] Starting episode {i+1}")
         obs = env.reset()
         done = False
         agent_state = None
@@ -108,8 +114,8 @@ def main(args):
                 first_time = False
             agent = agents[0]
             action, agent_state = agent.action(obs=obs['A'], reset=np.array([done]), state=agent_state)
-            actions.append(action.numpy()[0])
-            action = {'A': np.array(action[0])}  # dream returns action of shape (1,2)
+            actions.append(action.numpy())
+            action = {'A': action.numpy()}
             obs, rewards, dones, info = env.step(action)
             lidars.append(obs['A']['lidar'])
             occupancies.append(obs['A']['lidar_occupancy'])
@@ -117,6 +123,7 @@ def main(args):
             done = dones['A']
         # once collected an episode, for each agent
         # run the `dreaming` procedure (meaning encode, predict, decode)
+        print(f"[Info] Dreaming after episode {i + 1}")
         for agent, obs_type in zip(agents, args.obs_types):
             dreaming(agent._agent, cameras, lidars, occupancies, actions, obs_type, basedir)
 

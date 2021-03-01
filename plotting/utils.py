@@ -91,12 +91,10 @@ def load_trajectories(args, file_parsers):
   trajectories = []
   for dir in args.indir:
     print(f'Loading runs from {dir}', end='\n')
-    for file in dir.glob('**/trajectory*'):
+    for file in dir.glob('**/trajectory*checkpoint1*'):
         try:
             train_track, method, seed = parse_file(dir, file, file_parsers)
             test_track = file.parts[-1].split("_")[2]
-            checkpoint = file.parts[-1].split("_")[1]
-            method = f"{method}_{checkpoint}"
             if not check_track(train_track, args.tracks) or not check_method(method, args.methods):
                 continue
             trajectory = np.load(file)

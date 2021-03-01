@@ -2,10 +2,7 @@ import tensorflow as tf
 import time
 import imageio
 import numpy as np
-import matplotlib.pyplot as plt
 
-from dreamer import preprocess
-import tools
 
 def make_log_dir(args):
   out_dir = args.outdir / f'eval_{args.agent}_{args.trained_on.replace("_", "")}_{args.obs_type.replace("_", "")}_{time.time()}'

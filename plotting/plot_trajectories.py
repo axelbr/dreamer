@@ -15,7 +15,7 @@ import numpy as np
 from collections.abc import Iterable   # import directly from collections for Python < 3.3
 
 
-def plot_trajectories(trajectories, agent, train_track, test_track, outdir, minvel=0.0, maxvel=5.0):
+def plot_trajectories(trajectories, agent, train_track, test_track, outdir, minvel=0.5, maxvel=4.0):
     fig, ax = plt.subplots(1, 1)
     norm = plt.Normalize(minvel, maxvel)
     xx, yy, vv = [t.x for t in trajectories], [t.y for t in trajectories], [t.v for t in trajectories]
@@ -60,10 +60,10 @@ def plot_trajectories_programmed_methods(trajectories, outdir):
     methods = list(set([t.method for t in trajectories]))
     train_tracks = list(set([t.train_track for t in trajectories]))
     assert len(train_tracks) == 1 and train_tracks[0]==""
-    test_tracks = [t.test_track for t in trajectories]
+    test_tracks = list(set([t.test_track for t in trajectories]))
     for k, method in enumerate(methods):
         for i, test_track in enumerate(test_tracks):
-            filter_trajectories = [t for t in trajectories if t.method == method and t.test_track == test_tracks]
+            filter_trajectories = [t for t in trajectories if t.method == method and t.test_track == test_track]
             if len(filter_trajectories) > 0:
                 plot_trajectories(filter_trajectories, method, train_tracks[0], test_track, outdir)
 

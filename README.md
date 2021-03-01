@@ -1,90 +1,95 @@
-# Dream to Control
+# Dreamer for Autonomous Racing Cars
 
-Fast and simple implementation of the Dreamer agent in TensorFlow 2.
+Implementation of Dreamer for Autonomous Racing Cars.
 
-<img width="100%" src="https://imgur.com/x4NUHXl.gif">
+We propose to learn a policy directly from raw Lidar observations.
+The resulting policy has been evaluated on F1tenth tracks and then transfered to real cars.
 
-If you find this code useful, please reference in your paper:
+![Dreamer Austria](doc/austria_view.gif)
 
-```
-@article{hafner2019dreamer,
-  title={Dream to Control: Learning Behaviors by Latent Imagination},
-  author={Hafner, Danijar and Lillicrap, Timothy and Ba, Jimmy and Norouzi, Mohammad},
-  journal={arXiv preprint arXiv:1912.01603},
-  year={2019}
-}
-```
+The implementation extends the original implementation of [Dreamer](https://github.com/danijar/dreamer).
 
 ## Method
 
+We invite the reader to refer to the [Dreamer website](https://danijar.com/project/dreamer/) for the details on methodology.
+
 ![Dreamer](https://imgur.com/JrXC4rh.png)
 
-Dreamer learns a world model that predicts ahead in a compact feature space.
+From the author:
+
+>Dreamer learns a world model that predicts ahead in a compact feature space.
 From imagined feature sequences, it learns a policy and state-value function.
 The value gradients are backpropagated through the multi-step predictions to
 efficiently learn a long-horizon policy.
 
-- [Project website][website]
-- [Research paper][paper]
-- [Official implementation][code] (TensorFlow 1)
-
-[website]: https://danijar.com/dreamer
-[paper]: https://arxiv.org/pdf/1912.01603.pdf
-[code]: https://github.com/google-research/dreamer
-
-## Run with Docker
-
-The image is based on `tensorflow:2.3.1-gpu`, you need `nvidia-docker` to run them.
-See ![here](https://github.com/NVIDIA/nvidia-docker) for more details.
-
-To build the image:
-```  
-docker build -t dreamer .
-```
-
-To run the container:
-```
-docker run    
-    -u $(id -u):$(id -g) 
-    -v $(pwd):/dreamer
-    --name dreamer
-    --gpus all
-    --rm
-    dreamer
-    --task racecar_columbia --logdir logs/racecar_columbia --steps 1000000
-```
-
-**Notes:** 
-- The mount point allows you to use the host version of dreamer. 
-- You can write the results in the `logs` dir (*./logs*). You can customize the race scenarios in `./scenarios`.
-- The host can monitor the experiment by running `tensorboard --logdir logs/`
 
 ## Instructions
 
 Get dependencies:
 
 ```
-pip3 install --user tensorflow-gpu==2.1.0
-pip3 install --user tensorflow_probability
-pip3 install --user git+git://github.com/deepmind/dm_control.git
-pip3 install --user pandas
-pip3 install --user matplotlib
+pip3 install --user -r requirements.txt
 ```
 
-Train the agent:
+### Training
+
+Train the agent with Lidar reconstruction:
 
 ```
-python3 dreamer.py --logdir ./logdir/dmc_walker_walk/dreamer/1 --task dmc_walker_walk
+python3 dreamer.py --track columbia --obs_type lidar
 ```
+
+Train the agent with Occupancy Map reconstruction:
+```
+python3 dreamer.py --track columbia --obs_type lidar_occupancy
+```
+
+Please, refer to `dreamer.py` for the other command-line arguments.
+
+### Offline Evaluation
+The evaluation module runs offline testing of a trained agent (Dreamer, D4PG, MPO, PPO, SAC) or a programmed agent (Follow The Gap).
+
+The user must specify the training track (e.g., `--trained_on austria`) and the observation type (e.g. `--obs_type lidar_occupancy`).
+The user must provide a checkpoint in the format `checkpoint_dir/track_agent_obstype_id*`.
+
+The user can control the number of evaluation episodes (e.g., `--eval_episode 10`),
+the list of evaluation tracks (e.g., `--tracks austria columbia`).
+
+To run evaluation:
+```
+python evaluations/run_evaluation.py --agent dreamer \
+                                     --trained_on austria \
+                                     --obs_type lidar \
+                                     --checkpoint_dir logs/checkpoints \
+                                     --outdir logs/evaluations \
+                                     --eval_episodes 10 \
+                                     --tracks columbia barcelona \
+```
+The script will look for all the checkpoints with pattern `logs/checkpoints/austria_dreamer_lidar_*`
+
+# TODO
 
 Generate plots:
+# TODO
 
-```
-python3 plotting.py --indir ./logdir --outdir ./plots --xaxis step --yaxis test/return --bins 3e4
+
+## Instructions with Docker
+
+We also provide an docker image based on `tensorflow:2.3.1-gpu`.
+You need `nvidia-docker` to run them, see ![here](https://github.com/NVIDIA/nvidia-docker) for more details.
+
+To build the image:
+```  
+docker build -t dreamer .
 ```
 
-Graphs and GIFs:
+To train Dreamer within the container:
+```
+docker run    
+    -u $(id -u):$(id -g) 
+    -v $(pwd):/src    
+    --gpus all
+    --rm dreamer
+    python dreamer.py --track columbia --steps 1000000
+```
 
-```
-tensorboard --logdir ./logdir
-```

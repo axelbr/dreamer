@@ -99,7 +99,6 @@ def parse():
     parser.add_argument('--tracks', nargs='+', type=str, default=tracks)
     parser.add_argument('--outdir', type=pathlib.Path, required=True)
     parser.add_argument('--eval_episodes', nargs='?', type=int, default=10)
-    parser.add_argument('--save_dreams', action='store_true')
     parser.add_argument('--save_trajectories', action='store_true')
     args = parser.parse_args()
     assert args.agent == "ftg" or args.checkpoint_dir is not None
