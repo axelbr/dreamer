@@ -1,6 +1,6 @@
 import wrappers
 from racecar_gym.envs import MultiAgentScenario, ChangingTrackMultiAgentRaceEnv, MultiAgentRaceEnv
-from evaluations.utils import save_videos, summarize_episode, save_trajectory
+from callbacks import save_videos, save_episodes, save_trajectory, summarize_episode, summarize_eval_episode
 
 
 def make_multi_track_env(tracks, action_repeat, rendering=True, is_dreamer=True):
@@ -33,6 +33,6 @@ def wrap_wrt_track(env, action_repeat, outdir, writer, track, checkpoint_id, sav
   callbacks = []
   if save_trajectories:
     callbacks.append(lambda episodes: save_trajectory(episodes, outdir, action_repeat, track, checkpoint_id))
-  callbacks.append(lambda episodes: summarize_episode(episodes, outdir, writer, f'{track}', action_repeat))
+  callbacks.append(lambda episodes: summarize_eval_episode(episodes, outdir, writer, f'{track}', action_repeat))
   env = wrappers.Collect(env, callbacks)
   return env

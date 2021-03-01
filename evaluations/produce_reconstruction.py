@@ -5,7 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import tensorflow as tf
-from dreamer import preprocess
 import tools
 from evaluations.make_env import make_single_track_env, make_multi_track_env, wrap_wrt_track
 from evaluations.racing_agent import RacingAgent
@@ -78,7 +77,7 @@ def dreaming(agent, cameras, lidars, occupancies, actions, obstype, basedir):
     data = {'lidar': np.stack(np.expand_dims(lidars, 0)),
             'action': np.stack(np.expand_dims(actions, 0)),
             'lidar_occupancy': np.stack(np.expand_dims(occupancies, 0))}
-    data = preprocess(data, config=None)    # note: this is ugly but since we don't use reward clipping, i can pass config None
+    data = tools.preprocess(data, config=None)    # note: this is ugly but since we don't use reward clipping, i can pass config None
     data['image'] = np.stack(np.expand_dims(cameras, 0))  # hack: don't preprocess image
     embed = agent._encode(data)
     post, prior = agent._dynamics.observe(embed, data['action'])

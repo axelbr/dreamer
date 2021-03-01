@@ -8,7 +8,7 @@ import time
 
 from evaluations.racing_agent import RacingAgent
 from evaluations.make_env import make_multi_track_env, wrap_wrt_track
-from evaluations.utils import make_log_dir
+
 
 tf.config.run_functions_eagerly(run_eagerly=True)  # we need it to resume a model without need of same batchlen
 
@@ -20,14 +20,16 @@ def copy_checkpoint(agent, checkpoint_file, outdir, checkpoint_id):
     if agent in ["dreamer", "sac", "ppo"]:
         cp_dir = outdir / f'checkpoints/{checkpoint_id}'
         cp_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy(checkpoint_file, cp_dir)    # copy file
+        shutil.copy(checkpoint_file, cp_dir)  # copy file
     else:
-        cp_dir = outdir / 'checkpoints'     #dest dir must not exist before
+        cp_dir = outdir / 'checkpoints'  # dest dir must not exist before
         cp_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(checkpoint_file, cp_dir / f'{checkpoint_id}')   # copy dir
+        shutil.copytree(checkpoint_file, cp_dir / f'{checkpoint_id}')  # copy dir
+
 
 def get_checkpoint_regex(checkpoint_dir, track, agent, obs_type):
     return str(checkpoint_dir / f'{track}_{agent}_{obs_type}_[0-9]*')
+
 
 def glob_checkpoints(checkpoint_dir, track, agent, obs_type="*"):
     regex = get_checkpoint_regex(checkpoint_dir, track, agent, obs_type)
@@ -62,6 +64,14 @@ def eval_agent(base_env, agent, action_repeat, basedir, writer, checkpoint_id, s
                 done = dones['A']
 
 
+def make_log_dir(args):
+    out_dir = args.outdir / f'eval_{args.agent}_{args.trained_on.replace("_", "")}_{args.obs_type.replace("_", "")}_{time.time()}'
+    out_dir.mkdir(parents=True, exist_ok=True)
+    writer = tf.summary.create_file_writer(str(out_dir), max_queue=1000, flush_millis=20000)
+    writer.set_as_default()
+    return out_dir, writer
+
+
 def main(args):
     action_repeat = 8 if args.agent == "dreamer" else 4
     rendering = False
@@ -82,9 +92,6 @@ def main(args):
             agent.load(checkpoint)
             copy_checkpoint(args.agent, checkpoint, basedir, checkpoint_id=i + 1)
             eval_agent(base_env, agent, action_repeat, basedir, writer, i, save_trajectories=args.save_trajectories)
-
-
-
 
 
 def parse():

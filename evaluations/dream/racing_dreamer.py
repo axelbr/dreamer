@@ -1,6 +1,7 @@
 import pathlib
 import shutil
 
+import callbacks
 from evaluations.make_env import make_single_track_env
 from evaluations.racing_agent import Agent
 from dreamer import define_config, Dreamer
@@ -25,9 +26,9 @@ def make_initialization_env(config):
     env = make_single_track_env('columbia', action_repeat=config.action_repeat, rendering=False)
     datadir = pathlib.Path('.tmp')
     writer = tf.summary.create_file_writer(str(datadir), max_queue=1000, flush_millis=20000)
-    callbacks = []
-    callbacks.append(lambda episodes: tools.save_episodes(datadir, episodes))
-    env = wrappers.Collect(env, callbacks, config.precision)
+    callbacks_list = []
+    callbacks_list.append(lambda episodes: callbacks.save_episodes(datadir, episodes))
+    env = wrappers.Collect(env, callbacks_list, config.precision)
     return writer, datadir, env
 
 

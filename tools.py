@@ -219,6 +219,11 @@ def summarize_collection(metrics_dict, config, datadir, writer, prefix):
             [tf.summary.scalar(k, v) for k, v in metrics]
 
 
+def count_videos(directory):
+    filenames = directory.glob('**/*.mp4')
+    return sum(1 for _ in filenames)
+
+
 def count_episodes(directory):
     filenames = directory.glob('*.npz')
     lengths = [int(n.stem.rsplit('-', 1)[-1]) - 1 for n in filenames]
@@ -228,7 +233,6 @@ def count_episodes(directory):
 
 def count_steps(datadir, config):
     return count_episodes(datadir)[1] * config.action_repeat
-
 
 
 def load_episodes(directory, rescan, length=None, balance=False, seed=0):
@@ -262,6 +266,7 @@ def load_episodes(directory, rescan, length=None, balance=False, seed=0):
                 episode = {k: v[index: index + length] for k, v in episode.items()}
             yield episode
 
+
 def preprocess(obs, config):
     dtype = prec.global_policy().compute_dtype
     obs = obs.copy()
@@ -294,7 +299,6 @@ def load_dataset(directory, config):
     dataset = dataset.batch(config.batch_size, drop_remainder=True)
     dataset = dataset.prefetch(10)
     return dataset
-
 
 
 class SampleDist:
