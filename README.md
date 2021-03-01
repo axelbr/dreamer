@@ -11,7 +11,7 @@ The implementation extends the original implementation of [Dreamer](https://gith
 
 ## Method
 
-We invite the reader to refer to the [Dreamer website](https://danijar.com/project/dreamer/) for the details on methodology.
+We invite the reader to refer to the [Dreamer website](https://danijar.com/project/dreamer/) for the details on the algorithm.
 
 ![Dreamer](https://imgur.com/JrXC4rh.png)
 
@@ -64,7 +64,26 @@ The script will look for all the checkpoints with pattern `logs/checkpoints/aust
 The results are stored as tensorflow logs.
 
 # Plotting
-TODO
+The plotting module containes several scripts to visualize the results, usually aggregated over multiple experiments.
+
+To plot the learning curves:
+```
+python plotting/plot_training_curves.py --indir logs/experiments \
+                                        --outdir plots/learning_curves \
+                                        --methods dreamer mpo \
+                                        --tracks austria columbia treitlstrasse_v2
+```
+It will produce the comparison between Dreamer and MPO on the tracks Austria, Columbia, Treitlstrasse_v2.
+
+To plot the evaluation results:
+```
+python plotting/plot_test_evaluation.py --indir logs/evaluations \
+                                        --outdir plots/evaluation_charts \
+                                        --methods dreamer mpo \
+                                        --tracks austria
+                                        --vis_tracks austria columbia treitlstrasse_v2
+```
+It will produce the bar charts comparing Dreamer and MPO trained in Austria and evaluated in Austria, Columbia, Treitlstrasse_v2.
 
 
 ## Instructions with Docker
