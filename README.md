@@ -102,11 +102,6 @@ docker build -t dreamer .
 
 To train Dreamer within the container:
 ```
-docker run \
-    -u $(id -u):$(id -g) \ 
-    -v $(pwd):/src \
-    --gpus all \
-    --rm dreamer \
-    python dreamer.py --track columbia --steps 1000000
+docker run -u $(id -u):$(id -g) -v $(pwd):/src --gpus all --rm dreamer python dreamer.py --track columbia --steps 1000000
 ```
 
