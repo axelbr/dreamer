@@ -65,5 +65,5 @@ def summarize_episode(episode_list, config, datadir, writer, prefix):
     with writer.as_default():  # Env might run in a different thread.
         tf.summary.experimental.set_step(step)
         [tf.summary.scalar(k, v) for k, v in metrics]
-    print(f'\t[Log] {prefix.title()} episode of length {episode_len} ({length} sim steps) with return {ret:.1f}.')
+    print(f'\t[Summary] {prefix.title()} episode of length {episode_len} ({length} sim steps) with return {ret:.1f}.')
 
